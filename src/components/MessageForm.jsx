@@ -19,9 +19,12 @@ export default function MessageForm({ onMessageAdded }) {
     setIsSubmitting(true);
 
     try {
-      const emojiResult = await convertTextToEmoji(rawContent);
       const encodedText = encodeSafeBase64(rawContent.trim());
+      
+      // 1. First get emoji conversion without messageId
+      const emojiResult = await convertTextToEmoji(rawContent);
 
+      // 2. Add message to DB and retrieve created message object with UUID
       const res = await onMessageAdded({
         fromName: fromName.trim() || '익명',
         toName: toName.trim() || '누군가',
@@ -32,6 +35,12 @@ export default function MessageForm({ onMessageAdded }) {
       if (res && !res.success) {
         setFormError(res.error || 'DB 저장 실패');
         return;
+      }
+
+      // 3. Update log with messageId UUID if available
+      if (res && res.message && res.message.id) {
+        // Re-log or bind messageId for trace tracking
+        convertTextToEmoji(rawContent, res.message.id).catch(() => {});
       }
 
       try {

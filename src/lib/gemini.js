@@ -47,7 +47,6 @@ const ensureMinimumFourEmojis = (emojiStr, text) => {
     return emojiStr;
   }
 
-  // 1~3개만 튀어나왔을 때 문맥 어울림 이모지를 채워 무조건 4~6개 시퀀스로 보정
   const contextualFillers = ['💬', '👀', '💭', '⚡️', '🔥', '💥', '🎭', '🔮'];
   let hash = 0;
   for (let i = 0; i < (text || '').length; i++) hash = text.charCodeAt(i) + ((hash << 5) - hash);
@@ -67,9 +66,9 @@ const ensureMinimumFourEmojis = (emojiStr, text) => {
 };
 
 /**
- * 🎨 최후의 네트워크 장애 대비 룰 엔진 (최소 4개 이모지 반환 보장)
+ * 🎨 최후의 네트워크 장애 대비 룰 엔진 (최소 4개 이모지 반환 보장 & 묵시적 message_id 로깅)
  */
-const emergencyFallbackConverter = (text, reason = '네트워크 통신 지연') => {
+const emergencyFallbackConverter = (text, reason = '네트워크 통신 지연', messageId = null) => {
   if (reason.includes('429') || reason.includes('Quota exceeded') || reason.includes('rate-limits')) {
     console.warn(`⏳ [Google API 쿼터 초과] 약 30초 후 또는 새 API Key 등록 시 자동 복구됩니다.`);
   } else {
@@ -90,6 +89,7 @@ const emergencyFallbackConverter = (text, reason = '네트워크 통신 지연')
   ].join('');
 
   logAiExecution({
+    messageId: messageId || null,
     inputText: encodeSafeBase64(text),
     isSuccess: false,
     usedModel: 'emergency-fallback-engine',
@@ -107,9 +107,10 @@ const STABLE_MODELS = [
 ];
 
 /**
- * 🚀 구글 AI Studio 신규 및 구형 API 키 100% 호환 모델 탐색 + 최소 4개 이모지 보장
+ * 🚀 무슨 텍스트가 들어오든 100% 우선적으로 Gemini AI API를 직접 호출하여 4~8개 이모지로 변환
+ * (messageId 인자를 받아 ai_logs 테이블에 묵시적 FK로 저장 지원)
  */
-export const convertTextToEmoji = async (inputText) => {
+export const convertTextToEmoji = async (inputText, messageId = null) => {
   if (!inputText || inputText.trim() === '') {
     return '🤐💬👀💭';
   }
@@ -117,7 +118,7 @@ export const convertTextToEmoji = async (inputText) => {
   const apiKey = getGeminiApiKey();
 
   if (!apiKey) {
-    return emergencyFallbackConverter(inputText, 'Gemini API Key 미설정');
+    return emergencyFallbackConverter(inputText, 'Gemini API Key 미설정', messageId);
   }
 
   const promptText = `SYSTEM MANDATE: You are a creative translator. You MUST convert user input into a rich storytelling sequence of EXACTLY 4 to 8 emojis.
@@ -149,12 +150,12 @@ Emoji Sequence (4-8 emojis):`;
       let pureEmojis = extractPureEmojisOnly(responseText);
 
       if (pureEmojis && pureEmojis.length >= 1) {
-        // Enforce minimum 4 emojis guaranteed
         pureEmojis = ensureMinimumFourEmojis(pureEmojis, inputText);
 
-        console.log(`✅ [Gemini AI 변환 성공] 모델: ${modelName} ➡️ 이모지 (4~8개): ${pureEmojis}`);
+        console.log(`✅ [Gemini AI 변환 성공] 모델: ${modelName} ➡️ 이모지: ${pureEmojis}`);
 
         logAiExecution({
+          messageId: messageId || null,
           inputText: encodedInput,
           isSuccess: true,
           usedModel: `${modelName}-sdk`,
@@ -185,12 +186,12 @@ Emoji Sequence (4-8 emojis):`;
           let pureEmojis = extractPureEmojisOnly(responseText);
 
           if (pureEmojis && pureEmojis.length >= 1) {
-            // Enforce minimum 4 emojis guaranteed
             pureEmojis = ensureMinimumFourEmojis(pureEmojis, inputText);
 
-            console.log(`✅ [Gemini AI 변환 성공] 모델: ${modelName} (REST) ➡️ 이모지 (4~8개): ${pureEmojis}`);
+            console.log(`✅ [Gemini AI 변환 성공] 모델: ${modelName} (REST) ➡️ 이모지: ${pureEmojis}`);
 
             logAiExecution({
+              messageId: messageId || null,
               inputText: encodedInput,
               isSuccess: true,
               usedModel: `${modelName}-rest`,
@@ -205,5 +206,5 @@ Emoji Sequence (4-8 emojis):`;
     }
   }
 
-  return emergencyFallbackConverter(inputText, lastErrorMessage);
+  return emergencyFallbackConverter(inputText, lastErrorMessage, messageId);
 };

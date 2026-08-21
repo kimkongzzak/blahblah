@@ -22,10 +22,11 @@ CREATE TABLE IF NOT EXISTS public.comments (
   comment_text TEXT NOT NULL
 );
 
--- 3. AI Execution Logs Table (Gemini AI 호출 성공/실패 및 이모지 로그)
+-- 3. AI Execution Logs Table (Gemini AI 호출 성공/실패 및 묵시적 FK message_id)
 CREATE TABLE IF NOT EXISTS public.ai_logs (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+  message_id UUID, -- 묵시적 외래키 (FK 제약조건 없이 저장)
   input_text TEXT NOT NULL,
   is_success BOOLEAN NOT NULL,
   used_model VARCHAR(100) NOT NULL,
@@ -38,6 +39,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_created_at ON public.messages (created_a
 CREATE INDEX IF NOT EXISTS idx_messages_to_name ON public.messages (to_name);
 CREATE INDEX IF NOT EXISTS idx_comments_message_id ON public.comments (message_id);
 CREATE INDEX IF NOT EXISTS idx_ai_logs_created_at ON public.ai_logs (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ai_logs_message_id ON public.ai_logs (message_id);
 
 -- Enable RLS (Row Level Security)
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;

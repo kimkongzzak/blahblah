@@ -42,10 +42,11 @@ const saveLocalComments = (comments) => {
 };
 
 /**
- * 📊 AI 호출 성공/실패 및 이모지 변환 이력 DB 로그 저장
+ * 📊 AI 호출 성공/실패 및 이모지 변환 이력 DB 로그 저장 (묵시적 message_id 지원)
  */
-export const logAiExecution = async ({ inputText, isSuccess, usedModel, outputEmoji, errorMessage = null }) => {
+export const logAiExecution = async ({ inputText, isSuccess, usedModel, outputEmoji, errorMessage = null, messageId = null }) => {
   const logData = {
+    message_id: messageId || null,
     input_text: inputText,
     is_success: isSuccess,
     used_model: usedModel,
