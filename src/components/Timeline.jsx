@@ -37,7 +37,7 @@ export default function Timeline({
   }, [hasMore, loadingMore, loading, dbError, onLoadMore]);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       {dbError && (
         <div className="p-3 rounded-lg bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-200 text-xs font-mono space-y-2">
           <div className="flex items-start space-x-2">
@@ -59,7 +59,7 @@ export default function Timeline({
         </div>
       )}
 
-      <div className="flex items-center justify-between gap-2 pb-1">
+      <div className="flex items-center justify-between gap-2 pb-1 px-1">
         <div className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
           <span>🎋 대나무숲 피드</span>
           <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-mono">
@@ -91,20 +91,20 @@ export default function Timeline({
       </div>
 
       {loading && messages.length === 0 ? (
-        <div className="space-y-2">
+        <div className="space-y-2 p-3">
           {[1, 2].map((n) => (
-            <div key={n} className="corporate-card p-3 space-y-2">
+            <div key={n} className="py-3 space-y-2 border-b border-slate-100 dark:border-slate-800">
               <div className="w-24 h-3 skeleton rounded" />
               <div className="w-full h-8 skeleton rounded" />
             </div>
           ))}
         </div>
       ) : messages.length === 0 ? (
-        <div className="corporate-card p-6 text-center text-xs text-slate-400">
+        <div className="p-6 text-center text-xs text-slate-400">
           {dbError ? 'DB 오류로 데이터를 불러올 수 없습니다.' : '대나무 숲에 등록된 속마음이 없습니다. 🫅🐴👂'}
         </div>
       ) : (
-        <div className="space-y-2.5">
+        <div className="divide-y divide-slate-100 dark:divide-slate-800">
           {messages.map((msg) => (
             <MessageCard
               key={msg.id}
