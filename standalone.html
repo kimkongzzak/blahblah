@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WorkFeed & Dynamic Emoji Status (Standalone)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            corporate: { 50: '#f8fafc', 100: '#f1f5f9', 800: '#1e293b', 900: '#0f172a' }
+          }
+        }
+      }
+    }
+  </script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.4/dist/confetti.browser.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .corporate-card {
+      background-color: var(--card-bg, #ffffff);
+      border: 1px solid var(--card-border, #e2e8f0);
+      box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.05);
+      border-radius: 0.75rem;
+    }
+    .dark .corporate-card {
+      --card-bg: #1e293b;
+      --card-border: #334155;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 antialiased min-h-screen">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // Smart Rule Converter
+    function ruleBasedEmoji(text) {
+      if (!text) return '🤐';
+      const t = text.toLowerCase();
+      const res = [];
+      if (/개자식|시발|씨발|새끼|존나|좆|미친|병신|개새|미친놈|지랄/.test(t)) res.push('🦹', '🤬', '🖕', '🔥');
+      if (/하품|졸려|피곤|야근|퇴근|잠|자고|쉬고|지친|노답|회의/.test(t)) res.push('🥱', '😴', '☕️', '🤯');
+      if (/하지마|말고|안해|싫어|꺼져|그만|절대/.test(t)) res.push('🙅‍♂️', '🛑', '❌');
+      if (/죽|지옥|무덤|지옥|저주|망해|사직/.test(t)) res.push('🪦', '💀', '☠️');
+      if (/👍|따봉|잘|좋아|ㅋㅋ/.test(t)) res.push('👍', '😏', '🤡');
+      if (t.includes('개자식') && t.includes('하품') && t.includes('죽')) return '🦹🥱🙅‍♂️🪦👍';
+      return Array.from(new Set(res)).slice(0, 6).join('') || '💬🎭⚡️👀';
+    }
+
+    function StandaloneApp() {
+      const [messages, setMessages] = useState([
+        { id: '1', from_name: '판교익명A', to_name: '옆자리PM', emoji_content: '🦹🥱🙅‍♂️🪦👍', created_at: new Date().toISOString(), likes_count: 5 },
+        { id: '2', from_name: '김사원', to_name: '퇴근시간', emoji_content: '⏰🏃‍♂️💨🍻🥳', created_at: new Date(Date.now() - 3600000).toISOString(), likes_count: 12 }
+      ]);
+      const [fromName, setFromName] = useState('');
+      const [toName, setToName] = useState('');
+      const [rawContent, setRawContent] = useState('');
+      const [darkMode, setDarkMode] = useState(false);
+
+      const handleAdd = (e) => {
+        e.preventDefault();
+        if (!rawContent.trim()) return;
+        const emoji = ruleBasedEmoji(rawContent);
+        const newMsg = {
+          id: Date.now().toString(),
+          from_name: fromName.trim() || '익명',
+          to_name: toName.trim() || '누군가',
+          emoji_content: emoji,
+          created_at: new Date().toISOString(),
+          likes_count: 0
+        };
+        setMessages([newMsg, ...messages]);
+        setRawContent('');
+        if (window.confetti) window.confetti({ particleCount: 30, spread: 60 });
+      };
+
+      return (
+        <div className={darkMode ? 'dark' : ''}>
+          <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100">
+            <header className="sticky top-0 z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur border-b border-slate-200 dark:border-slate-800">
+              <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold">🦹</div>
+                  <h1 className="font-semibold text-sm sm:text-base">WorkFeed Standalone</h1>
+                </div>
+                <button onClick={() => setDarkMode(!darkMode)} className="p-2 text-xs rounded bg-slate-100 dark:bg-slate-800">
+                  {darkMode ? '☀️ Light' : '🌙 Dark'}
+                </button>
+              </div>
+            </header>
+
+            <main className="max-w-2xl mx-auto px-4 py-6">
+              {/* Form */}
+              <div className="corporate-card p-4 mb-6">
+                <h2 className="text-xs font-semibold mb-3">익명 이모지 피드 작성</h2>
+                <form onSubmit={handleAdd} className="space-y-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      placeholder="1) FROM (닉네임)"
+                      value={fromName}
+                      onChange={e => setFromName(e.target.value)}
+                      className="px-3 py-1.5 text-xs rounded border dark:border-slate-700 dark:bg-slate-800"
+                    />
+                    <input
+                      type="text"
+                      placeholder="2) TO (대상)"
+                      value={toName}
+                      onChange={e => setToName(e.target.value)}
+                      className="px-3 py-1.5 text-xs rounded border dark:border-slate-700 dark:bg-slate-800"
+                    />
+                  </div>
+                  <textarea
+                    placeholder="3) 속마음/욕설 입력 (이모지로 변환 저장됨)"
+                    value={rawContent}
+                    onChange={e => setRawContent(e.target.value)}
+                    rows={3}
+                    className="w-full px-3 py-1.5 text-xs rounded border dark:border-slate-700 dark:bg-slate-800"
+                  />
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] text-slate-400">🔒 원문은 이모지로 자동 변환 저장됩니다.</span>
+                    <button type="submit" className="px-4 py-1.5 text-xs font-medium bg-blue-600 text-white rounded">
+                      [등록] (이모지 변환)
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* Feed */}
+              <div className="space-y-3">
+                {messages.map(m => (
+                  <div key={m.id} className="corporate-card p-4">
+                    <div className="flex justify-between text-xs text-slate-500 mb-2">
+                      <span><b>{m.from_name}</b> ➡️ <b>@{m.to_name}</b></span>
+                      <span>방금 전</span>
+                    </div>
+                    <div className="text-3xl my-2 py-2 px-3 bg-slate-100 dark:bg-slate-800/60 rounded">
+                      {m.emoji_content}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </main>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<StandaloneApp />);
+  </script>
+</body>
+</html>
