@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import MessageForm from './components/MessageForm';
 import Timeline from './components/Timeline';
-import EnvConfigModal from './components/EnvConfigModal';
 import AdminAuthModal from './components/AdminAuthModal';
 import { fetchMessages, createMessage, deleteMessage } from './lib/supabase';
 
@@ -23,7 +22,6 @@ export default function App() {
     return localStorage.getItem('IS_ADMIN_AUTHENTICATED') === 'true';
   });
 
-  const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [isAdminAuthOpen, setIsAdminAuthOpen] = useState(false);
 
   useEffect(() => {
@@ -34,7 +32,6 @@ export default function App() {
     }
   }, [darkMode]);
 
-  // Initial load Function with explicit error kill-switch
   const loadInitialData = async (searchTerm = searchTo) => {
     setLoading(true);
     setPage(0);
@@ -44,7 +41,7 @@ export default function App() {
       if (res.error) {
         setDbError(res.error);
         setMessages([]);
-        setHasMore(false); // STOP all future requests
+        setHasMore(false);
       } else {
         setMessages(res.data || []);
         setHasMore(res.hasMore);
@@ -57,7 +54,6 @@ export default function App() {
     }
   };
 
-  // Debounced search trigger (Safe single execution)
   useEffect(() => {
     let isMounted = true;
     const timer = setTimeout(() => {
@@ -71,7 +67,6 @@ export default function App() {
     };
   }, [searchTo]);
 
-  // Load more with strict guard against infinite loops
   const handleLoadMore = async () => {
     if (loadingMore || !hasMore || dbError) return;
     setLoadingMore(true);
@@ -80,7 +75,7 @@ export default function App() {
       const res = await fetchMessages({ page: nextPage, limit: 10, searchTo });
       if (res.error) {
         setDbError(res.error);
-        setHasMore(false); // STOP future requests on error
+        setHasMore(false);
       } else {
         setMessages((prev) => [...prev, ...(res.data || [])]);
         setPage(nextPage);
@@ -121,7 +116,6 @@ export default function App() {
       <Header
         darkMode={darkMode}
         setDarkMode={setDarkMode}
-        openConfigModal={() => setIsConfigOpen(true)}
         openAdminModal={() => setIsAdminAuthOpen(true)}
         isAdmin={isAdmin}
       />
@@ -143,11 +137,6 @@ export default function App() {
           dbError={dbError}
         />
       </main>
-
-      <EnvConfigModal
-        isOpen={isConfigOpen}
-        onClose={() => setIsConfigOpen(false)}
-      />
 
       <AdminAuthModal
         isOpen={isAdminAuthOpen}

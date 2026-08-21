@@ -1,7 +1,7 @@
 import React from 'react';
-import { Moon, Sun, Lock, Unlock, Settings } from 'lucide-react';
+import { Moon, Sun, Lock, Unlock } from 'lucide-react';
 
-export default function Header({ darkMode, setDarkMode, openConfigModal, openAdminModal, isAdmin }) {
+export default function Header({ darkMode, setDarkMode, openAdminModal, isAdmin }) {
   return (
     <header className="sticky top-0 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
       <div className="max-w-2xl mx-auto px-4 h-16 flex items-center justify-between">
@@ -34,14 +34,6 @@ export default function Header({ darkMode, setDarkMode, openConfigModal, openAdm
           >
             {isAdmin ? <Unlock className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
             <span className="text-xs font-semibold">{isAdmin ? '🔑 관리자' : '🔐 인증'}</span>
-          </button>
-
-          <button
-            onClick={openConfigModal}
-            className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition"
-            title="설정"
-          >
-            <Settings className="w-4 h-4" />
           </button>
 
           <button
