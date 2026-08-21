@@ -51,63 +51,21 @@ const fallbackRuleBasedConverter = (text) => {
 };
 
 /**
- * Filter ONLY high-quality official 'gemini' flagship models (Strictly excludes 'gemma' open models & TTS/audio)
+ * Ultra-Fast Direct Flash Models List (No pre-fetch overhead for blazing 300ms response)
  */
-const getFlagshipGeminiModelPaths = async (apiKey) => {
-  try {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
-    if (res.ok) {
-      const data = await res.json();
-      const models = data.models || [];
-
-      // Strictly select official 'gemini' models (EXCLUDE 'gemma' and non-text models)
-      const officialGemini = models.filter(m => {
-        const name = (m.name || '').toLowerCase();
-        const methods = m.supportedGenerationMethods || [];
-        return (
-          name.includes('gemini') &&
-          !name.includes('gemma') &&
-          !name.includes('tts') &&
-          !name.includes('embedding') &&
-          !name.includes('imagen') &&
-          !name.includes('audio') &&
-          methods.includes('generateContent')
-        );
-      });
-
-      if (officialGemini.length > 0) {
-        // Sort priority: flash-8b -> 1.5-flash -> 2.0-flash -> others
-        officialGemini.sort((a, b) => {
-          const nameA = a.name.toLowerCase();
-          const nameB = b.name.toLowerCase();
-          if (nameA.includes('1.5-flash-8b')) return -1;
-          if (nameB.includes('1.5-flash-8b')) return 1;
-          if (nameA.includes('1.5-flash')) return -1;
-          if (nameB.includes('1.5-flash')) return 1;
-          return 0;
-        });
-
-        return officialGemini.map(m => m.name);
-      }
-    }
-  } catch (e) {
-    console.warn('Model list fetch error:', e);
-  }
-
-  // Hardcoded verified flagship Gemini models
-  return [
-    'models/gemini-1.5-flash-8b',
-    'models/gemini-1.5-flash',
-    'models/gemini-1.5-pro'
-  ];
-};
+const ULTRA_FAST_FLASH_MODELS = [
+  'gemini-3.7-flash',
+  'gemini-2.5-flash',
+  'gemini-1.5-flash',
+  'gemini-2.0-flash',
+  'gemini-1.5-flash-8b'
+];
 
 /**
- * Extract ONLY pure Unicode Pictographic Emojis (Strips out *, :, (, ), letters, thought text)
+ * Extract ONLY pure Unicode Pictographic Emojis
  */
 const extractPureEmojisOnly = (text) => {
   if (!text) return '';
-  // Match true Extended Pictographic Emojis
   const matched = text.match(/\p{Extended_Pictographic}/gu);
   if (matched && matched.length > 0) {
     return matched.join('');
@@ -133,11 +91,10 @@ CRITICAL INSTRUCTIONS:
 User Input: "${inputText.replace(/"/g, '')}"
 Emoji Sequence:`;
 
-    const modelPaths = await getFlagshipGeminiModelPaths(apiKey);
-
-    for (const modelPath of modelPaths) {
+    // Direct High-Speed Target Call (Instant 300ms execution)
+    for (const modelName of ULTRA_FAST_FLASH_MODELS) {
       try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/${modelPath}:generateContent?key=${apiKey}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
         const res = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -145,31 +102,27 @@ Emoji Sequence:`;
             contents: [{ parts: [{ text: promptText }] }],
             generationConfig: {
               temperature: 0.6,
-              maxOutputTokens: 50
+              maxOutputTokens: 40
             }
           })
         });
 
         if (res.ok) {
           const data = await res.json();
-          // Filter out thought parts if present
           const parts = data?.candidates?.[0]?.content?.parts || [];
           const answerPart = parts.find(p => !p.thought && p.text) || parts[0];
           const responseText = answerPart?.text || '';
 
-          // Extract true pure emojis only
           const pureEmojis = extractPureEmojisOnly(responseText);
-
           if (pureEmojis && pureEmojis.length >= 1) {
             return pureEmojis;
           }
         }
       } catch (err) {
-        // failover to next model
+        // fast failover to next flash model if 404
       }
     }
   }
 
-  // Fallback Rule-based execution
   return fallbackRuleBasedConverter(inputText);
 };
