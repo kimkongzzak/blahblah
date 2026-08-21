@@ -4,8 +4,7 @@ const getGeminiApiKey = () => {
 
 export const isGeminiConfigured = () => {
   const key = getGeminiApiKey();
-  // Genuine Google AI Studio keys start with 'AIzaSy' and are around 39 characters long
-  return Boolean(key && key.length > 10 && !key.includes('your-gemini'));
+  return Boolean(key && key.length > 5 && !key.includes('your-gemini'));
 };
 
 /**
@@ -78,16 +77,11 @@ export const convertTextToEmoji = async (inputText) => {
 
   console.group('🔍 [Gemini API 통신 정밀 진단 Log]');
   console.log('1. API Key 존재 여부:', Boolean(apiKey));
-  console.log('2. API Key 자릿수:', apiKey ? `${apiKey.length}자` : '0자 (키 누락)');
-  console.log('3. API Key 시작 접두사:', apiKey ? apiKey.substring(0, 7) : '없음');
-
-  if (apiKey && !apiKey.startsWith('AIzaSy')) {
-    console.error('⚠️ [경고] 현재 설정된 키는 Google AI Studio 키(AIzaSy... 형태)가 아니라 다른 키(AQAb8RN...)입니다!');
-    console.error('👉 https://aistudio.google.com/app/apikey 에 접속하여 AIzaSy로 시작하는 키를 받아 .env에 넣어주세요.');
-  }
+  console.log('2. API Key 자릿수:', apiKey ? `${apiKey.length}자` : '0자');
+  console.log('3. API Key 샘플:', apiKey ? `${apiKey.substring(0, 8)}...` : '없음');
 
   if (!isGeminiConfigured()) {
-    console.warn('⚠️ Gemini API Key가 유효하지 않아 스마트 룰 엔진 결과를 반환합니다.');
+    console.warn('⚠️ Gemini API Key가 설정되지 않아 스마트 룰 엔진 결과를 반환합니다.');
     console.groupEnd();
     return fallbackRuleBasedConverter(inputText);
   }
@@ -128,7 +122,7 @@ Emoji Sequence:`;
         }
       } else {
         const errorJson = await res.json().catch(() => ({}));
-        console.error(`❌ 구글 API 서버 응답 에러 [Status ${res.status}]:`, errorJson?.error?.message);
+        console.error(`❌ 구글 API 서버 응답 에러 [${ep.version}/${ep.model} - Status ${res.status}]:`, errorJson?.error?.message);
       }
     } catch (err) {
       console.error('❌ 통신 에러:', err);
