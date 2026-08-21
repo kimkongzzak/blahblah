@@ -96,7 +96,7 @@ Emoji Sequence (4-8 emojis):`;
   let lastErrorMessage = '';
   const encodedInput = encodeSafeBase64(inputText);
 
-  // [1순위] Google 공식 @google/genai SDK로 gemini-3.5-flash AI 직접 호출
+  // [1순위] Google 공식 @google/genai SDK로 gemini-3.5-flash AI 직접 호출 (maxOutputTokens: 300으로 넉넉하게 확장)
   try {
     const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
@@ -104,7 +104,7 @@ Emoji Sequence (4-8 emojis):`;
       contents: promptText,
       config: {
         temperature: 0.7,
-        maxOutputTokens: 100,
+        maxOutputTokens: 300, // maxOutputTokens를 300으로 대폭 확장하여 MAX_TOKENS 절단 원천 방지
       }
     });
 
@@ -142,7 +142,7 @@ Emoji Sequence (4-8 emojis):`;
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: promptText }] }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 100 }
+          generationConfig: { temperature: 0.7, maxOutputTokens: 300 }
         })
       });
 
