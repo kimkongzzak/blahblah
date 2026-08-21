@@ -17,6 +17,7 @@ export default function App() {
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [searchTo, setSearchTo] = useState('');
+  const [dbError, setDbError] = useState(null);
 
   const [isAdmin, setIsAdmin] = useState(() => {
     return localStorage.getItem('IS_ADMIN_AUTHENTICATED') === 'true';
@@ -36,12 +37,18 @@ export default function App() {
   const loadInitialData = useCallback(async (searchTerm = searchTo) => {
     setLoading(true);
     setPage(0);
+    setDbError(null);
     try {
       const res = await fetchMessages({ page: 0, limit: 10, searchTo: searchTerm });
-      setMessages(res.data || []);
-      setHasMore(res.hasMore);
+      if (res.error) {
+        setDbError(res.error);
+        setMessages([]);
+      } else {
+        setMessages(res.data || []);
+        setHasMore(res.hasMore);
+      }
     } catch (err) {
-      console.error(err);
+      setDbError(`[오류] ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -60,9 +67,13 @@ export default function App() {
     const nextPage = page + 1;
     try {
       const res = await fetchMessages({ page: nextPage, limit: 10, searchTo });
-      setMessages((prev) => [...prev, ...(res.data || [])]);
-      setPage(nextPage);
-      setHasMore(res.hasMore);
+      if (res.error) {
+        setDbError(res.error);
+      } else {
+        setMessages((prev) => [...prev, ...(res.data || [])]);
+        setPage(nextPage);
+        setHasMore(res.hasMore);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -74,17 +85,21 @@ export default function App() {
     const res = await createMessage({ fromName, toName, emojiContent });
     if (res.success && res.message) {
       setMessages((prev) => [res.message, ...prev]);
+      setDbError(null);
+      return { success: true };
+    } else {
+      return { success: false, error: res.error || 'DB 등록 실패' };
     }
   };
 
   const handleDeleteMessage = async (id) => {
-    if (!window.confirm('이 메시지를 삭제하시겠습니까?')) return;
+    if (!window.window.confirm('이 메시지를 삭제하시겠습니까?')) return;
 
     const res = await deleteMessage(id);
     if (res.success) {
       setMessages((prev) => prev.filter((m) => m.id !== id));
     } else {
-      alert('삭제에 실패했습니다.');
+      alert(res.error || '삭제에 실패했습니다.');
     }
   };
 
@@ -112,6 +127,7 @@ export default function App() {
           setSearchTo={setSearchTo}
           isAdmin={isAdmin}
           onDeleteMessage={handleDeleteMessage}
+          dbError={dbError}
         />
       </main>
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Send, Sparkles } from 'lucide-react';
+import { Sparkles, AlertTriangle } from 'lucide-react';
 import { convertTextToEmoji } from '../lib/gemini';
 import confetti from 'canvas-confetti';
 
@@ -8,9 +8,11 @@ export default function MessageForm({ onMessageAdded }) {
   const [toName, setToName] = useState('');
   const [rawContent, setRawContent] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formError, setFormError] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setFormError('');
 
     if (!rawContent.trim()) return;
 
@@ -19,11 +21,16 @@ export default function MessageForm({ onMessageAdded }) {
     try {
       const emojiResult = await convertTextToEmoji(rawContent);
 
-      await onMessageAdded({
+      const res = await onMessageAdded({
         fromName: fromName.trim() || '익명',
         toName: toName.trim() || '누군가',
         emojiContent: emojiResult
       });
+
+      if (res && !res.success) {
+        setFormError(res.error || 'DB 저장 중 오류가 발생했습니다.');
+        return;
+      }
 
       try {
         confetti({ particleCount: 20, spread: 50, origin: { y: 0.8 } });
@@ -31,7 +38,7 @@ export default function MessageForm({ onMessageAdded }) {
 
       setRawContent('');
     } catch (err) {
-      console.error(err);
+      setFormError(`[오류] ${err.message || '등록 중 예기치 못한 에러가 발생했습니다.'}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -40,6 +47,13 @@ export default function MessageForm({ onMessageAdded }) {
   return (
     <div className="corporate-card p-4 mb-5">
       <form onSubmit={handleSubmit} className="space-y-3">
+        {formError && (
+          <div className="p-2.5 rounded bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs flex items-start gap-1.5 font-mono">
+            <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+            <span>{formError}</span>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
           <div>
             <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">

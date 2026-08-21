@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Search, Loader2, RefreshCw } from 'lucide-react';
+import { Search, Loader2, RefreshCw, AlertTriangle } from 'lucide-react';
 import MessageCard from './MessageCard';
 
 export default function Timeline({
@@ -12,7 +12,8 @@ export default function Timeline({
   searchTo,
   setSearchTo,
   isAdmin,
-  onDeleteMessage
+  onDeleteMessage,
+  dbError
 }) {
   const observerTarget = useRef(null);
 
@@ -35,6 +36,17 @@ export default function Timeline({
 
   return (
     <div className="space-y-3">
+      {/* DB Exception Error Alert Banner */}
+      {dbError && (
+        <div className="p-3 rounded-lg bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-200 text-xs font-mono flex items-start space-x-2">
+          <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <span className="font-bold block mb-0.5">DB 연동 오류 발생:</span>
+            <span>{dbError}</span>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between gap-2 pb-1">
         <div className="text-xs font-semibold text-slate-700 dark:text-slate-300">
           TIMELINE ({messages.length})
@@ -55,7 +67,8 @@ export default function Timeline({
           <button
             onClick={onRefresh}
             disabled={loading}
-            className="p-1 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300"
+            className="p-1 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
+            title="새로고침"
           >
             <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
           </button>
@@ -73,7 +86,7 @@ export default function Timeline({
         </div>
       ) : messages.length === 0 ? (
         <div className="corporate-card p-6 text-center text-xs text-slate-400">
-          피드가 비어있습니다.
+          등록된 피드가 없습니다.
         </div>
       ) : (
         <div className="space-y-2.5">

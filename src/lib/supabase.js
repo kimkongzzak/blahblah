@@ -11,8 +11,13 @@ export const supabase = isSupabaseConfigured()
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
 
-const LOCAL_STORAGE_KEY = 'emoji_timeline_messages_v1';
-const LOCAL_COMMENTS_KEY = 'emoji_timeline_comments_v1';
+const LOCAL_STORAGE_KEY = 'emoji_timeline_messages_v2';
+const LOCAL_COMMENTS_KEY = 'emoji_timeline_comments_v2';
+
+// Clear old mock/sample data key if exists
+try {
+  localStorage.removeItem('emoji_timeline_messages_v1');
+} catch (e) {}
 
 const getLocalMessages = () => {
   try {
@@ -40,6 +45,7 @@ const saveLocalComments = (comments) => {
   localStorage.setItem(LOCAL_COMMENTS_KEY, JSON.stringify(comments));
 };
 
+// Fetch messages with explicit exception catching
 export const fetchMessages = async ({ page = 0, limit = 10, searchTo = '' }) => {
   if (isSupabaseConfigured()) {
     try {
@@ -54,17 +60,19 @@ export const fetchMessages = async ({ page = 0, limit = 10, searchTo = '' }) => 
       }
 
       const { data, error, count } = await query;
-      if (error) throw error;
+      
+      if (error) {
+        return { data: [], hasMore: false, totalCount: 0, error: `[DB 조회 실패] ${error.message} (${error.code || 'ERR'})` };
+      }
 
-      // Format comments array sorted by created_at
       const formatted = (data || []).map(item => ({
         ...item,
         comments: (item.comments || []).sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
       }));
 
-      return { data: formatted, hasMore: (page + 1) * limit < (count || 0), totalCount: count || 0, isLocal: false };
+      return { data: formatted, hasMore: (page + 1) * limit < (count || 0), totalCount: count || 0, error: null };
     } catch (err) {
-      console.warn('Supabase fetch failed, fallback to local:', err);
+      return { data: [], hasMore: false, totalCount: 0, error: `[DB 연결 실패] ${err.message || 'Supabase 네트워크 오류'}` };
     }
   }
 
@@ -84,9 +92,10 @@ export const fetchMessages = async ({ page = 0, limit = 10, searchTo = '' }) => 
 
   const hasMore = startIdx + limit < list.length;
 
-  return { data: pageData, hasMore, totalCount: list.length, isLocal: true };
+  return { data: pageData, hasMore, totalCount: list.length, error: null };
 };
 
+// Create Message with explicit error reporting
 export const createMessage = async ({ fromName, toName, emojiContent }) => {
   const newMessage = {
     from_name: fromName || '익명',
@@ -102,10 +111,12 @@ export const createMessage = async ({ fromName, toName, emojiContent }) => {
         .insert([newMessage])
         .select();
 
-      if (error) throw error;
-      return { success: true, message: { ...data[0], comments: [] }, isLocal: false };
+      if (error) {
+        return { success: false, error: `[DB 저장 실패] ${error.message} (테이블/RLS 확인 필요)` };
+      }
+      return { success: true, message: { ...data[0], comments: [] } };
     } catch (err) {
-      console.warn('Supabase insert failed:', err);
+      return { success: false, error: `[DB 연결 실패] ${err.message || '네트워크 오류'}` };
     }
   }
 
@@ -119,7 +130,7 @@ export const createMessage = async ({ fromName, toName, emojiContent }) => {
   list.unshift(created);
   saveLocalMessages(list);
 
-  return { success: true, message: created, isLocal: true };
+  return { success: true, message: created };
 };
 
 export const incrementLike = async (id, currentLikes = 0) => {
@@ -134,7 +145,7 @@ export const incrementLike = async (id, currentLikes = 0) => {
       if (error) throw error;
       return data[0]?.likes_count || currentLikes + 1;
     } catch (err) {
-      console.warn('Supabase update like failed:', err);
+      console.warn('Like update failed:', err);
     }
   }
 
@@ -156,11 +167,12 @@ export const deleteMessage = async (id) => {
         .delete()
         .eq('id', id);
 
-      if (error) throw error;
+      if (error) {
+        return { success: false, error: `[DB 삭제 실패] ${error.message}` };
+      }
       return { success: true };
     } catch (err) {
-      console.warn('Supabase delete failed:', err);
-      return { success: false, error: err.message };
+      return { success: false, error: `[DB 연결 실패] ${err.message}` };
     }
   }
 
@@ -169,7 +181,6 @@ export const deleteMessage = async (id) => {
   return { success: true };
 };
 
-// Add comment to message
 export const addComment = async ({ messageId, commentText, authorName }) => {
   const newComment = {
     message_id: messageId,
@@ -184,10 +195,12 @@ export const addComment = async ({ messageId, commentText, authorName }) => {
         .insert([newComment])
         .select();
 
-      if (error) throw error;
+      if (error) {
+        return { success: false, error: `[댓글 DB 저장 실패] ${error.message}` };
+      }
       return { success: true, comment: data[0] };
     } catch (err) {
-      console.warn('Supabase add comment failed:', err);
+      return { success: false, error: `[DB 연결 실패] ${err.message}` };
     }
   }
 
@@ -211,10 +224,12 @@ export const deleteComment = async (commentId) => {
         .delete()
         .eq('id', commentId);
 
-      if (error) throw error;
+      if (error) {
+        return { success: false, error: `[댓글 DB 삭제 실패] ${error.message}` };
+      }
       return { success: true };
     } catch (err) {
-      console.warn('Supabase delete comment failed:', err);
+      return { success: false, error: `[DB 연결 실패] ${err.message}` };
     }
   }
 
