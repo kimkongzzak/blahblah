@@ -42,7 +42,11 @@ const extractPureEmojisOnly = (text) => {
  * 🎨 최후의 네트워크 장애 대비 룰 엔진 (최소 4개 이모지 반환 보장)
  */
 const emergencyFallbackConverter = (text, reason = '네트워크 통신 지연') => {
-  console.log(`📢 [대체 이모지] AI 응답 대기/지연으로 룰 이모지를 생성했습니다. (사유: ${reason})`);
+  if (reason.includes('429') || reason.includes('Quota exceeded') || reason.includes('rate-limits')) {
+    console.warn(`⏳ [Google API 429 쿼터 일시 초과] 무료 티어 제한(분당 20회)을 초과했습니다. 약 30초 후 구글 리셋 시 자동 복구됩니다.`);
+  } else {
+    console.log(`📢 [대체 이모지 모드] AI 응답 대기/지연으로 룰 이모지를 생성했습니다. (사유: ${reason})`);
+  }
 
   if (!text) return '🤐💬👀💭';
   const emojis = ['🎭', '💬', '⚡️', '👀', '💭', '🔮', '✨', '🔥', '🏃‍♂️', '🤬', '🛑', '💥'];
