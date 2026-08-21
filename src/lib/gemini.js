@@ -44,44 +44,53 @@ const fallbackRuleBasedConverter = (text) => {
 
   const unique = Array.from(new Set(resultEmojis));
   if (t.includes('개자식') && t.includes('하품') && t.includes('죽')) {
-    return '🦹🥱🙅‍♂️🪦👍';
+    return '🦹🥱<ctrl42>🙅‍♂️🪦👍';
   }
 
   return unique.slice(0, 6).join('');
 };
 
 /**
- * Fetch Exact Active Model Path List from Google API Response
+ * Filter text-only generation models strictly (Excludes TTS, Embedding, Image models)
  */
-const getActiveExactModelPaths = async (apiKey) => {
+const getBestTextGenerationModelPaths = async (apiKey) => {
   try {
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
     if (res.ok) {
       const data = await res.json();
       const models = data.models || [];
 
-      // Filter models that support generateContent
-      const valid = models.filter(m => 
-        m.name && 
-        Array.isArray(m.supportedGenerationMethods) &&
-        m.supportedGenerationMethods.includes('generateContent')
-      );
+      // Strictly filter models for pure text generateContent (Exclude audio/tts/embedding/image)
+      const validTextModels = models.filter(m => {
+        const name = (m.name || '').toLowerCase();
+        const methods = m.supportedGenerationMethods || [];
+        return (
+          methods.includes('generateContent') &&
+          !name.includes('tts') &&
+          !name.includes('embedding') &&
+          !name.includes('imagen') &&
+          !name.includes('audio') &&
+          !name.includes('vision')
+        );
+      });
 
-      // Return exact model names (e.g. "models/gemini-1.5-flash-8b")
-      if (valid.length > 0) {
-        return valid.map(m => m.name);
+      if (validTextModels.length > 0) {
+        // Prioritize standard stable models first (flash-8b, 1.5-flash, 2.0-flash-exp, gemma)
+        const sorted = validTextModels.sort((a, b) => {
+          const nameA = a.name.toLowerCase();
+          const nameB = b.name.toLowerCase();
+          if (nameA.includes('1.5-flash') || nameA.includes('gemma')) return -1;
+          if (nameB.includes('1.5-flash') || nameB.includes('gemma')) return 1;
+          return 0;
+        });
+        return sorted.map(m => m.name);
       }
     }
   } catch (e) {
-    console.warn('Failed to query model list:', e);
+    console.warn('Failed to fetch model list:', e);
   }
 
-  // Default hardcoded fallbacks if list API blocked
-  return [
-    'models/gemini-1.5-flash-8b',
-    'models/gemini-1.5-flash-latest',
-    'models/gemini-1.5-pro-latest'
-  ];
+  return ['models/gemini-1.5-flash-8b', 'models/gemini-1.5-flash'];
 };
 
 export const convertTextToEmoji = async (inputText) => {
@@ -103,11 +112,10 @@ Rules:
 User Input: "${inputText.replace(/"/g, '')}"
 Emoji Sequence Output:`;
 
-    // 1. Fetch exact model paths dynamically returned by Google
-    const exactModelPaths = await getActiveExactModelPaths(apiKey);
+    const modelPaths = await getBestTextGenerationModelPaths(apiKey);
 
-    // 2. Try exact model paths in sequence
-    for (const modelPath of exactModelPaths) {
+    // Try filtered text-generation models
+    for (const modelPath of modelPaths) {
       try {
         const url = `https://generativelanguage.googleapis.com/v1beta/${modelPath}:generateContent?key=${apiKey}`;
         const res = await fetch(url, {
@@ -132,7 +140,7 @@ Emoji Sequence Output:`;
           }
         }
       } catch (err) {
-        console.warn(`[Gemini API] Failed calling '${modelPath}':`, err);
+        // quiet failover
       }
     }
   }
