@@ -1,4 +1,12 @@
 const getGeminiApiKey = () => {
+  // Clear any old typos stored in LocalStorage
+  try {
+    const localKey = localStorage.getItem('CUSTOM_GEMINI_API_KEY');
+    if (localKey && localKey.includes('5ivQ5')) {
+      localStorage.removeItem('CUSTOM_GEMINI_API_KEY');
+    }
+  } catch (e) {}
+
   return import.meta.env.VITE_GEMINI_API_KEY || localStorage.getItem('CUSTOM_GEMINI_API_KEY') || '';
 };
 
@@ -62,9 +70,6 @@ const extractPureEmojisOnly = (text) => {
   return '';
 };
 
-/**
- * Verified Targets for Google AI Studio AQ Keys
- */
 const TARGET_MODELS = [
   { version: 'v1beta', name: 'gemini-2.0-flash' },
   { version: 'v1beta', name: 'gemini-2.5-flash' },
