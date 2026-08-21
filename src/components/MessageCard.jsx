@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ThumbsUp, Clock, Trash2, MessageCircle, Send, ArrowRight, ShieldCheck } from 'lucide-react';
+import { ThumbsUp, Clock, Trash2, MessageCircle, Send, ArrowRight, Lock, Unlock } from 'lucide-react';
 import { incrementLike, addComment, deleteComment } from '../lib/supabase';
 import { decodeSafeBase64 } from '../lib/gemini';
 
@@ -19,6 +19,7 @@ export default function MessageCard({ message, isAdmin, onDelete }) {
   const [likes, setLikes] = useState(message.likes_count || 0);
   const [hasLiked, setHasLiked] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showDecoded, setShowDecoded] = useState(false);
 
   const [commentsList, setCommentsList] = useState(message.comments || []);
   const [commentText, setCommentText] = useState('');
@@ -100,6 +101,22 @@ export default function MessageCard({ message, isAdmin, onDelete }) {
             <span>{formatTimeAgo(message.created_at)}</span>
           </div>
 
+          {/* Admin Only [비밀] Toggle Button (Visible on ALL messages when logged in as Admin) */}
+          {isAdmin && (
+            <button
+              onClick={() => setShowDecoded(!showDecoded)}
+              className={`px-2 py-0.5 rounded text-[11px] font-semibold flex items-center gap-1 transition shadow-xs ${
+                showDecoded
+                  ? 'bg-amber-500 text-white border border-amber-600'
+                  : 'bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 hover:bg-amber-200'
+              }`}
+              title="관리자 전용 비밀 원문 디코딩"
+            >
+              {showDecoded ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
+              <span>{showDecoded ? '비밀 닫기' : '비밀'}</span>
+            </button>
+          )}
+
           {isAdmin && (
             <button
               onClick={() => onDelete(message.id)}
@@ -112,14 +129,16 @@ export default function MessageCard({ message, isAdmin, onDelete }) {
         </div>
       </div>
 
-      {/* Admin Only Always-Visible Decoded Text View Box */}
-      {isAdmin && decodedRawText && (
-        <div className="mb-2 p-2 rounded-lg bg-amber-50/90 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-900 text-amber-900 dark:text-amber-200 text-xs font-mono break-all">
-          <div className="flex items-center gap-1 font-bold text-[10px] text-amber-700 dark:text-amber-300 mb-0.5">
-            <ShieldCheck className="w-3 h-3 text-amber-600" />
-            <span>[관리자 전용 원문 디코딩]:</span>
+      {/* Admin Only Decoded Text View Box */}
+      {isAdmin && showDecoded && (
+        <div className="mb-2 p-2.5 rounded-lg bg-amber-50/90 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-800 text-amber-950 dark:text-amber-100 text-xs font-mono break-all shadow-inner">
+          <div className="flex items-center gap-1 font-bold text-[10px] text-amber-700 dark:text-amber-300 mb-1 border-b border-amber-200 dark:border-amber-800/80 pb-0.5">
+            <Lock className="w-3 h-3 text-amber-600 shrink-0" />
+            <span>🔒 [관리자 비밀 원문 해독]:</span>
           </div>
-          <span className="font-sans text-xs">{decodedRawText}</span>
+          <div className="font-sans text-xs pt-0.5">
+            {decodedRawText || <span className="italic text-slate-400">원문 미기록 (이전 작성 메시지)</span>}
+          </div>
         </div>
       )}
 
