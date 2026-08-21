@@ -1,3 +1,5 @@
+import { GoogleGenAI } from '@google/genai';
+
 const getGeminiApiKey = () => {
   return import.meta.env.VITE_GEMINI_API_KEY || localStorage.getItem('CUSTOM_GEMINI_API_KEY') || '';
 };
@@ -62,13 +64,6 @@ const extractPureEmojisOnly = (text) => {
   return '';
 };
 
-const TARGET_MODELS = [
-  { version: 'v1beta', name: 'gemini-1.5-flash' },
-  { version: 'v1beta', name: 'gemini-2.0-flash' },
-  { version: 'v1beta', name: 'gemini-2.5-flash' },
-  { version: 'v1', name: 'gemini-1.5-flash' }
-];
-
 export const convertTextToEmoji = async (inputText) => {
   if (!inputText || inputText.trim() === '') {
     return '🤐';
@@ -87,22 +82,40 @@ CRITICAL INSTRUCTIONS:
 User Input: "${inputText.replace(/"/g, '')}"
 Emoji Sequence:`;
 
-    for (const item of TARGET_MODELS) {
+    // 1. Try Google's Latest Official @google/genai SDK (gemini-3.7-flash)
+    try {
+      const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
+      
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: promptText,
+        config: {
+          temperature: 0.6,
+          maxOutputTokens: 50,
+        }
+      });
+
+      const responseText = response.text ? response.text.trim() : '';
+      const pureEmojis = extractPureEmojisOnly(responseText);
+
+      if (pureEmojis && pureEmojis.length >= 1) {
+        return pureEmojis;
+      }
+    } catch (err) {
+      console.warn('[Next-Gen @google/genai SDK] Call failed, fallback to direct REST:', err);
+    }
+
+    // 2. Try REST fallback with gemini-2.5-flash & gemini-1.5-flash
+    const restModels = ['gemini-2.5-flash', 'gemini-1.5-flash'];
+    for (const modelName of restModels) {
       try {
-        const url = `https://generativelanguage.googleapis.com/${item.version}/models/${item.name}:generateContent`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey.trim()}`;
         const res = await fetch(url, {
           method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'x-goog-api-key': apiKey.trim(),
-            'x-goog-api-client': 'genai-js'
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ parts: [{ text: promptText }] }],
-            generationConfig: {
-              temperature: 0.6,
-              maxOutputTokens: 50
-            }
+            generationConfig: { temperature: 0.6, maxOutputTokens: 50 }
           })
         });
 
@@ -114,30 +127,8 @@ Emoji Sequence:`;
           if (pureEmojis && pureEmojis.length >= 1) {
             return pureEmojis;
           }
-        } else {
-          // Retry with query param if header rejected
-          const queryUrl = `${url}?key=${apiKey.trim()}`;
-          const qRes = await fetch(queryUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: promptText }] }],
-              generationConfig: { temperature: 0.6, maxOutputTokens: 50 }
-            })
-          });
-
-          if (qRes.ok) {
-            const data = await qRes.json();
-            const responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            const pureEmojis = extractPureEmojisOnly(responseText);
-            if (pureEmojis && pureEmojis.length >= 1) {
-              return pureEmojis;
-            }
-          }
         }
-      } catch (err) {
-        // failover
-      }
+      } catch (e) {}
     }
   }
 
