@@ -13,6 +13,7 @@ export const supabase = isSupabaseConfigured()
 
 const LOCAL_STORAGE_KEY = 'emoji_timeline_messages_v2';
 const LOCAL_COMMENTS_KEY = 'emoji_timeline_comments_v2';
+const LOCAL_AI_LOGS_KEY = 'emoji_timeline_ai_logs_v2';
 
 const getLocalMessages = () => {
   try {
@@ -38,6 +39,33 @@ const saveLocalMessages = (messages) => {
 
 const saveLocalComments = (comments) => {
   localStorage.setItem(LOCAL_COMMENTS_KEY, JSON.stringify(comments));
+};
+
+/**
+ * 📊 AI 호출 성공/실패 및 이모지 변환 이력 DB 로그 저장
+ */
+export const logAiExecution = async ({ inputText, isSuccess, usedModel, outputEmoji, errorMessage = null }) => {
+  const logData = {
+    input_text: inputText,
+    is_success: isSuccess,
+    used_model: usedModel,
+    output_emoji: outputEmoji,
+    error_message: errorMessage
+  };
+
+  if (isSupabaseConfigured()) {
+    try {
+      await supabase.from('ai_logs').insert([logData]);
+    } catch (err) {
+      console.warn('AI Log DB insert warning:', err);
+    }
+  } else {
+    try {
+      const logs = JSON.parse(localStorage.getItem(LOCAL_AI_LOGS_KEY) || '[]');
+      logs.unshift({ ...logData, id: `log-${Date.now()}`, created_at: new Date().toISOString() });
+      localStorage.setItem(LOCAL_AI_LOGS_KEY, JSON.stringify(logs.slice(0, 50)));
+    } catch (e) {}
+  }
 };
 
 // Safe Fetch without relying on Supabase implicit FK relationships (Prevents PGRST200 error)

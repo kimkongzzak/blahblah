@@ -1,4 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
+import { logAiExecution } from './supabase';
 
 /**
  * 🔑 Gemini API Key 획득
@@ -31,7 +32,18 @@ const emergencyFallbackConverter = (text, reason = '알 수 없는 원인') => {
   let hash = 0;
   for (let i = 0; i < text.length; i++) hash = text.charCodeAt(i) + ((hash << 5) - hash);
   const start = Math.abs(hash) % emojis.length;
-  return [emojis[start], emojis[(start + 1) % emojis.length], emojis[(start + 2) % emojis.length], emojis[(start + 3) % emojis.length]].join('');
+  const result = [emojis[start], emojis[(start + 1) % emojis.length], emojis[(start + 2) % emojis.length], emojis[(start + 3) % emojis.length]].join('');
+
+  // Log failure to DB asynchronously
+  logAiExecution({
+    inputText: text,
+    isSuccess: false,
+    usedModel: 'emergency-fallback-engine',
+    outputEmoji: result,
+    errorMessage: reason
+  });
+
+  return result;
 };
 
 /**
@@ -79,6 +91,16 @@ Emoji Sequence:`;
     if (pureEmojis && pureEmojis.length >= 1) {
       console.log(`✅ [Gemini AI 변환 성공] 모델: gemini-3.5-flash (SDK)`);
       console.log(`└─ 입력: "${inputText}" ➡️ 이모지: ${pureEmojis}`);
+
+      // Log success to DB asynchronously
+      logAiExecution({
+        inputText: inputText,
+        isSuccess: true,
+        usedModel: 'gemini-3.5-flash-sdk',
+        outputEmoji: pureEmojis,
+        errorMessage: null
+      });
+
       return pureEmojis;
     } else {
       console.warn(`⚠️ [Gemini AI 응답 정제 실패] 응답 텍스트에 이모지가 없어 재시도합니다. 원문: "${responseText}"`);
@@ -107,6 +129,16 @@ Emoji Sequence:`;
         if (pureEmojis && pureEmojis.length >= 1) {
           console.log(`✅ [Gemini AI 변환 성공] 모델: gemini-3.5-flash (REST)`);
           console.log(`└─ 입력: "${inputText}" ➡️ 이모지: ${pureEmojis}`);
+
+          // Log success to DB asynchronously
+          logAiExecution({
+            inputText: inputText,
+            isSuccess: true,
+            usedModel: 'gemini-3.5-flash-rest',
+            outputEmoji: pureEmojis,
+            errorMessage: null
+          });
+
           return pureEmojis;
         }
       } else {
@@ -120,6 +152,6 @@ Emoji Sequence:`;
     }
   }
 
-  // 서버 통신 장애 시 최후의 비상 안전망 및 투명 로그 출력
+  // 서버 통신 장애 시 최후의 비상 안전망 및 투명 로그 저장
   return emergencyFallbackConverter(inputText, lastErrorMessage);
 };
