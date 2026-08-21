@@ -44,53 +44,75 @@ const fallbackRuleBasedConverter = (text) => {
 
   const unique = Array.from(new Set(resultEmojis));
   if (t.includes('개자식') && t.includes('하품') && t.includes('죽')) {
-    return '🦹🥱<ctrl42>🙅‍♂️🪦👍';
+    return '🦹🥱🙅‍♂️🪦👍';
   }
 
   return unique.slice(0, 6).join('');
 };
 
 /**
- * Filter text-only generation models strictly (Excludes TTS, Embedding, Image models)
+ * Filter ONLY high-quality official 'gemini' flagship models (Strictly excludes 'gemma' open models & TTS/audio)
  */
-const getBestTextGenerationModelPaths = async (apiKey) => {
+const getFlagshipGeminiModelPaths = async (apiKey) => {
   try {
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
     if (res.ok) {
       const data = await res.json();
       const models = data.models || [];
 
-      // Strictly filter models for pure text generateContent (Exclude audio/tts/embedding/image)
-      const validTextModels = models.filter(m => {
+      // Strictly select official 'gemini' models (EXCLUDE 'gemma' and non-text models)
+      const officialGemini = models.filter(m => {
         const name = (m.name || '').toLowerCase();
         const methods = m.supportedGenerationMethods || [];
         return (
-          methods.includes('generateContent') &&
+          name.includes('gemini') &&
+          !name.includes('gemma') &&
           !name.includes('tts') &&
           !name.includes('embedding') &&
           !name.includes('imagen') &&
           !name.includes('audio') &&
-          !name.includes('vision')
+          methods.includes('generateContent')
         );
       });
 
-      if (validTextModels.length > 0) {
-        // Prioritize standard stable models first (flash-8b, 1.5-flash, 2.0-flash-exp, gemma)
-        const sorted = validTextModels.sort((a, b) => {
+      if (officialGemini.length > 0) {
+        // Sort priority: flash-8b -> 1.5-flash -> 2.0-flash -> others
+        officialGemini.sort((a, b) => {
           const nameA = a.name.toLowerCase();
           const nameB = b.name.toLowerCase();
-          if (nameA.includes('1.5-flash') || nameA.includes('gemma')) return -1;
-          if (nameB.includes('1.5-flash') || nameB.includes('gemma')) return 1;
+          if (nameA.includes('1.5-flash-8b')) return -1;
+          if (nameB.includes('1.5-flash-8b')) return 1;
+          if (nameA.includes('1.5-flash')) return -1;
+          if (nameB.includes('1.5-flash')) return 1;
           return 0;
         });
-        return sorted.map(m => m.name);
+
+        return officialGemini.map(m => m.name);
       }
     }
   } catch (e) {
-    console.warn('Failed to fetch model list:', e);
+    console.warn('Model list fetch error:', e);
   }
 
-  return ['models/gemini-1.5-flash-8b', 'models/gemini-1.5-flash'];
+  // Hardcoded verified flagship Gemini models
+  return [
+    'models/gemini-1.5-flash-8b',
+    'models/gemini-1.5-flash',
+    'models/gemini-1.5-pro'
+  ];
+};
+
+/**
+ * Extract ONLY pure Unicode Pictographic Emojis (Strips out *, :, (, ), letters, thought text)
+ */
+const extractPureEmojisOnly = (text) => {
+  if (!text) return '';
+  // Match true Extended Pictographic Emojis
+  const matched = text.match(/\p{Extended_Pictographic}/gu);
+  if (matched && matched.length > 0) {
+    return matched.join('');
+  }
+  return '';
 };
 
 export const convertTextToEmoji = async (inputText) => {
@@ -101,20 +123,18 @@ export const convertTextToEmoji = async (inputText) => {
   const apiKey = getGeminiApiKey();
 
   if (isGeminiConfigured()) {
-    const promptText = `System Rule: You are an expert translator that converts user input (which may contain raw emotions, corporate stress, insults, complaints, or jokes) exclusively into a sequence of vivid, storytelling emojis.
-      
-Rules:
-1. Output ONLY emojis. No text, no markdown, no quotes, no explanations, no spaces between emojis unless necessary.
-2. The emoji count MUST be between 4 and 8 emojis.
-3. Express the nuance, subjects, action, and underlying emotion accurately.
-4. For example, if input is "개자식 하품하지 말고 그냥 죽었으면", output should be similar to "🦹🥱🙅‍♂️🪦👍".
+    const promptText = `Convert user input into a sequence of 4 to 8 vivid storytelling emojis representing emotions and actions.
+
+CRITICAL INSTRUCTIONS:
+- Output ONLY valid unicode emojis.
+- Do NOT output words, markdown, ASCII symbols like (*, :, (, )), or reasoning text.
+- Do NOT explain your thought process.
 
 User Input: "${inputText.replace(/"/g, '')}"
-Emoji Sequence Output:`;
+Emoji Sequence:`;
 
-    const modelPaths = await getBestTextGenerationModelPaths(apiKey);
+    const modelPaths = await getFlagshipGeminiModelPaths(apiKey);
 
-    // Try filtered text-generation models
     for (const modelPath of modelPaths) {
       try {
         const url = `https://generativelanguage.googleapis.com/v1beta/${modelPath}:generateContent?key=${apiKey}`;
@@ -124,23 +144,28 @@ Emoji Sequence Output:`;
           body: JSON.stringify({
             contents: [{ parts: [{ text: promptText }] }],
             generationConfig: {
-              temperature: 0.7,
-              maxOutputTokens: 60
+              temperature: 0.6,
+              maxOutputTokens: 50
             }
           })
         });
 
         if (res.ok) {
           const data = await res.json();
-          const responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-          const emojiOnly = responseText.trim().replace(/[a-zA-Z0-9\s.,!?"'가-힣]/g, '');
+          // Filter out thought parts if present
+          const parts = data?.candidates?.[0]?.content?.parts || [];
+          const answerPart = parts.find(p => !p.thought && p.text) || parts[0];
+          const responseText = answerPart?.text || '';
 
-          if (emojiOnly && emojiOnly.length >= 1) {
-            return emojiOnly;
+          // Extract true pure emojis only
+          const pureEmojis = extractPureEmojisOnly(responseText);
+
+          if (pureEmojis && pureEmojis.length >= 1) {
+            return pureEmojis;
           }
         }
       } catch (err) {
-        // quiet failover
+        // failover to next model
       }
     }
   }
