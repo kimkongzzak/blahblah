@@ -82,12 +82,12 @@ CRITICAL INSTRUCTIONS:
 User Input: "${inputText.replace(/"/g, '')}"
 Emoji Sequence:`;
 
-    // 1. Try Google's Latest Official @google/genai SDK (gemini-3.7-flash)
+    // 1. Try Google's Latest Official @google/genai SDK with model 'gemini-3.5-flash'
     try {
       const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
       
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.5-flash',
         contents: promptText,
         config: {
           temperature: 0.6,
@@ -105,8 +105,8 @@ Emoji Sequence:`;
       console.warn('[Next-Gen @google/genai SDK] Call failed, fallback to direct REST:', err);
     }
 
-    // 2. Try REST fallback with gemini-2.5-flash & gemini-1.5-flash
-    const restModels = ['gemini-2.5-flash', 'gemini-1.5-flash'];
+    // 2. Try REST fallback with gemini-3.5-flash & gemini-1.5-flash
+    const restModels = ['gemini-3.5-flash', 'gemini-1.5-flash', 'gemini-3.5-pro'];
     for (const modelName of restModels) {
       try {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey.trim()}`;
