@@ -12,6 +12,7 @@ export const supabase = isSupabaseConfigured()
   : null;
 
 const LOCAL_STORAGE_KEY = 'emoji_timeline_messages_v1';
+const LOCAL_COMMENTS_KEY = 'emoji_timeline_comments_v1';
 
 const getLocalMessages = () => {
   try {
@@ -22,8 +23,21 @@ const getLocalMessages = () => {
   }
 };
 
+const getLocalComments = () => {
+  try {
+    const data = localStorage.getItem(LOCAL_COMMENTS_KEY);
+    return data ? JSON.parse(data) : [];
+  } catch (e) {
+    return [];
+  }
+};
+
 const saveLocalMessages = (messages) => {
   localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(messages));
+};
+
+const saveLocalComments = (comments) => {
+  localStorage.setItem(LOCAL_COMMENTS_KEY, JSON.stringify(comments));
 };
 
 export const fetchMessages = async ({ page = 0, limit = 10, searchTo = '' }) => {
@@ -31,7 +45,7 @@ export const fetchMessages = async ({ page = 0, limit = 10, searchTo = '' }) => 
     try {
       let query = supabase
         .from('messages')
-        .select('*', { count: 'exact' })
+        .select('*, comments(*)', { count: 'exact' })
         .order('created_at', { ascending: false })
         .range(page * limit, (page + 1) * limit - 1);
 
@@ -41,20 +55,33 @@ export const fetchMessages = async ({ page = 0, limit = 10, searchTo = '' }) => 
 
       const { data, error, count } = await query;
       if (error) throw error;
-      return { data: data || [], hasMore: (page + 1) * limit < (count || 0), totalCount: count || 0, isLocal: false };
+
+      // Format comments array sorted by created_at
+      const formatted = (data || []).map(item => ({
+        ...item,
+        comments: (item.comments || []).sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+      }));
+
+      return { data: formatted, hasMore: (page + 1) * limit < (count || 0), totalCount: count || 0, isLocal: false };
     } catch (err) {
-      console.warn('Supabase fetch failed:', err);
+      console.warn('Supabase fetch failed, fallback to local:', err);
     }
   }
 
   let list = getLocalMessages();
+  const allComments = getLocalComments();
+
   if (searchTo && searchTo.trim() !== '') {
     list = list.filter(m => m.to_name.toLowerCase().includes(searchTo.trim().toLowerCase()));
   }
   list.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
   const startIdx = page * limit;
-  const pageData = list.slice(startIdx, startIdx + limit);
+  const pageData = list.slice(startIdx, startIdx + limit).map(m => ({
+    ...m,
+    comments: allComments.filter(c => c.message_id === m.id).sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+  }));
+
   const hasMore = startIdx + limit < list.length;
 
   return { data: pageData, hasMore, totalCount: list.length, isLocal: true };
@@ -76,7 +103,7 @@ export const createMessage = async ({ fromName, toName, emojiContent }) => {
         .select();
 
       if (error) throw error;
-      return { success: true, message: data[0], isLocal: false };
+      return { success: true, message: { ...data[0], comments: [] }, isLocal: false };
     } catch (err) {
       console.warn('Supabase insert failed:', err);
     }
@@ -86,7 +113,8 @@ export const createMessage = async ({ fromName, toName, emojiContent }) => {
   const created = {
     ...newMessage,
     id: `local-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-    created_at: new Date().toISOString()
+    created_at: new Date().toISOString(),
+    comments: []
   };
   list.unshift(created);
   saveLocalMessages(list);
@@ -120,7 +148,6 @@ export const incrementLike = async (id, currentLikes = 0) => {
   return currentLikes + 1;
 };
 
-// Delete message function
 export const deleteMessage = async (id) => {
   if (isSupabaseConfigured() && !String(id).startsWith('local-')) {
     try {
@@ -139,5 +166,59 @@ export const deleteMessage = async (id) => {
 
   const list = getLocalMessages().filter(m => m.id !== id);
   saveLocalMessages(list);
+  return { success: true };
+};
+
+// Add comment to message
+export const addComment = async ({ messageId, commentText, authorName }) => {
+  const newComment = {
+    message_id: messageId,
+    comment_text: commentText,
+    author_name: authorName || '익명'
+  };
+
+  if (isSupabaseConfigured() && !String(messageId).startsWith('local-')) {
+    try {
+      const { data, error } = await supabase
+        .from('comments')
+        .insert([newComment])
+        .select();
+
+      if (error) throw error;
+      return { success: true, comment: data[0] };
+    } catch (err) {
+      console.warn('Supabase add comment failed:', err);
+    }
+  }
+
+  const comments = getLocalComments();
+  const created = {
+    ...newComment,
+    id: `c-local-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+    created_at: new Date().toISOString()
+  };
+  comments.push(created);
+  saveLocalComments(comments);
+
+  return { success: true, comment: created };
+};
+
+export const deleteComment = async (commentId) => {
+  if (isSupabaseConfigured() && !String(commentId).startsWith('c-local-')) {
+    try {
+      const { error } = await supabase
+        .from('comments')
+        .delete()
+        .eq('id', commentId);
+
+      if (error) throw error;
+      return { success: true };
+    } catch (err) {
+      console.warn('Supabase delete comment failed:', err);
+    }
+  }
+
+  const comments = getLocalComments().filter(c => c.id !== commentId);
+  saveLocalComments(comments);
   return { success: true };
 };

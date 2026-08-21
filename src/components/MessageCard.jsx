@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { ThumbsUp, Copy, Check, Clock, ArrowRight, Trash2 } from 'lucide-react';
-import { incrementLike } from '../lib/supabase';
+import { ThumbsUp, Copy, Clock, ArrowRight, Trash2, MessageCircle, Send } from 'lucide-react';
+import { incrementLike, addComment, deleteComment } from '../lib/supabase';
 
 function formatTimeAgo(dateString) {
   if (!dateString) return '방금 전';
@@ -19,6 +19,12 @@ export default function MessageCard({ message, isAdmin, onDelete }) {
   const [hasLiked, setHasLiked] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  // Comments state (Default Auto Expanded)
+  const [commentsList, setCommentsList] = useState(message.comments || []);
+  const [commentText, setCommentText] = useState('');
+  const [authorName, setAuthorName] = useState('');
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+
   const handleLike = async () => {
     if (hasLiked) return;
     setHasLiked(true);
@@ -33,10 +39,42 @@ export default function MessageCard({ message, isAdmin, onDelete }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleAddComment = async (e) => {
+    e.preventDefault();
+    if (!commentText.trim()) return;
+
+    setIsSubmittingComment(true);
+    try {
+      const res = await addComment({
+        messageId: message.id,
+        commentText: commentText.trim(),
+        authorName: authorName.trim() || '익명'
+      });
+
+      if (res.success && res.comment) {
+        setCommentsList(prev => [...prev, res.comment]);
+        setCommentText('');
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSubmittingComment(false);
+    }
+  };
+
+  const handleDeleteComment = async (commentId) => {
+    if (!window.confirm('댓글을 삭제하시겠습니까?')) return;
+    const res = await deleteComment(commentId);
+    if (res.success) {
+      setCommentsList(prev => prev.filter(c => c.id !== commentId));
+    }
+  };
+
   const emojiArray = Array.from(message.emoji_content || '');
 
   return (
     <div className="corporate-card p-3.5 hover:shadow-sm transition">
+      {/* Card Header */}
       <div className="flex items-center justify-between text-xs mb-2 pb-1.5 border-b border-slate-100 dark:border-slate-800">
         <div className="flex items-center space-x-1.5 font-medium text-slate-700 dark:text-slate-300">
           <span className="font-semibold text-slate-900 dark:text-slate-100">
@@ -58,7 +96,7 @@ export default function MessageCard({ message, isAdmin, onDelete }) {
             <button
               onClick={() => onDelete(message.id)}
               className="p-1 rounded text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition"
-              title="메시지 삭제 (관리자)"
+              title="메시지 삭제"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
@@ -66,6 +104,7 @@ export default function MessageCard({ message, isAdmin, onDelete }) {
         </div>
       </div>
 
+      {/* Main Emoji Story */}
       <div className="my-2 py-1.5 px-3 rounded bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
         <div className="flex flex-wrap items-center gap-1.5 text-2xl tracking-wide select-all">
           {emojiArray.map((emo, idx) => (
@@ -74,7 +113,8 @@ export default function MessageCard({ message, isAdmin, onDelete }) {
         </div>
       </div>
 
-      <div className="flex items-center justify-between text-xs pt-1">
+      {/* Actions */}
+      <div className="flex items-center justify-between text-xs pt-1 pb-2">
         <div className="flex items-center space-x-2">
           <button
             onClick={handleLike}
@@ -99,6 +139,73 @@ export default function MessageCard({ message, isAdmin, onDelete }) {
             )}
           </button>
         </div>
+
+        <div className="flex items-center space-x-1 text-[11px] text-slate-400">
+          <MessageCircle className="w-3 h-3" />
+          <span>댓글 {commentsList.length}개</span>
+        </div>
+      </div>
+
+      {/* Auto-Expanded Comments Section */}
+      <div className="mt-2 pt-2.5 border-t border-slate-100 dark:border-slate-800/80 space-y-2">
+        {/* Comment List */}
+        {commentsList.length > 0 && (
+          <div className="space-y-1.5 mb-2.5">
+            {commentsList.map((c) => (
+              <div
+                key={c.id}
+                className="px-2.5 py-1.5 rounded bg-slate-50/80 dark:bg-slate-800/50 text-xs flex items-start justify-between group/c"
+              >
+                <div>
+                  <span className="font-semibold text-slate-800 dark:text-slate-200 mr-1.5 text-[11px]">
+                    {c.author_name || '익명'}:
+                  </span>
+                  <span className="text-slate-700 dark:text-slate-300 text-xs">
+                    {c.comment_text}
+                  </span>
+                  <span className="ml-2 text-[10px] text-slate-400 font-mono">
+                    {formatTimeAgo(c.created_at)}
+                  </span>
+                </div>
+
+                {isAdmin && (
+                  <button
+                    onClick={() => handleDeleteComment(c.id)}
+                    className="text-rose-400 hover:text-rose-600 text-[10px] ml-1"
+                  >
+                    삭제
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Add Comment Form */}
+        <form onSubmit={handleAddComment} className="flex items-center gap-1.5">
+          <input
+            type="text"
+            placeholder="닉네임"
+            value={authorName}
+            onChange={(e) => setAuthorName(e.target.value)}
+            className="w-20 px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none"
+          />
+          <input
+            type="text"
+            placeholder="댓글 작성..."
+            value={commentText}
+            onChange={(e) => setCommentText(e.target.value)}
+            className="flex-1 px-2.5 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none"
+          />
+          <button
+            type="submit"
+            disabled={isSubmittingComment || !commentText.trim()}
+            className="px-2.5 py-1 text-xs font-semibold rounded bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 text-white disabled:opacity-50 transition flex items-center gap-1 whitespace-nowrap"
+          >
+            <Send className="w-2.5 h-2.5" />
+            <span>[댓글]</span>
+          </button>
+        </form>
       </div>
     </div>
   );
