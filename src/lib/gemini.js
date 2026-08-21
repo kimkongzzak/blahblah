@@ -63,12 +63,12 @@ const extractPureEmojisOnly = (text) => {
 };
 
 /**
- * Super Light & Fast Gemini Models List (Thinking-free 200ms ultra light models)
+ * Google AI Studio v1 Official Production Endpoints (Resolves 404 v1beta mismatch)
  */
-const LIGHT_FAST_MODELS = [
-  'gemini-1.5-flash-8b',
-  'gemini-2.0-flash-exp',
-  'gemini-1.5-flash-latest'
+const TARGET_ENDPOINTS = [
+  { version: 'v1', model: 'gemini-1.5-flash' },
+  { version: 'v1', model: 'gemini-1.5-pro' },
+  { version: 'v1beta', model: 'gemini-1.5-flash' }
 ];
 
 export const convertTextToEmoji = async (inputText) => {
@@ -89,18 +89,18 @@ CRITICAL INSTRUCTIONS:
 User Input: "${inputText.replace(/"/g, '')}"
 Emoji Sequence:`;
 
-    // Try super light models without thinking delay
-    for (const modelName of LIGHT_FAST_MODELS) {
+    // Try Google AI Studio official 'v1' endpoints first
+    for (const ep of TARGET_ENDPOINTS) {
       try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+        const url = `https://generativelanguage.googleapis.com/${ep.version}/models/${ep.model}:generateContent?key=${apiKey}`;
         const res = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ parts: [{ text: promptText }] }],
             generationConfig: {
-              temperature: 0.5,
-              maxOutputTokens: 30
+              temperature: 0.6,
+              maxOutputTokens: 50
             }
           })
         });
@@ -113,12 +113,16 @@ Emoji Sequence:`;
           if (pureEmojis && pureEmojis.length >= 1) {
             return pureEmojis;
           }
+        } else {
+          const errJson = await res.json().catch(() => ({}));
+          console.error(`[Gemini API ${ep.version}/${ep.model}] Status ${res.status}:`, errJson?.error?.message || 'Error');
         }
       } catch (err) {
-        // fast failover
+        console.error(`[Gemini API ${ep.version}/${ep.model}] Network error:`, err);
       }
     }
   }
 
+  // Fallback Rule-based execution
   return fallbackRuleBasedConverter(inputText);
 };
