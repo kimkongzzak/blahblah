@@ -6,16 +6,7 @@ import { GoogleGenAI } from '@google/genai';
 const getGeminiApiKey = () => {
   const envKey = import.meta.env.VITE_GEMINI_API_KEY || '';
   const localKey = localStorage.getItem('CUSTOM_GEMINI_API_KEY') || '';
-  const finalKey = (envKey || localKey).trim();
-
-  // 구버전 오타 키가 LocalStorage에 남아있을 경우 자동 정제
-  if (localKey && localKey.includes('5ivQ5')) {
-    try {
-      localStorage.removeItem('CUSTOM_GEMINI_API_KEY');
-    } catch (e) {}
-  }
-
-  return finalKey;
+  return (envKey || localKey).trim();
 };
 
 /**
@@ -27,8 +18,46 @@ export const isGeminiConfigured = () => {
 };
 
 /**
- * 🎨 룰 기반 키워드/감정 매핑 Fallback 엔진
- * API 통신 불가 시 0.001초 만에 문맥 반응형 이모지 반환
+ * 🎨 다채로운 감정/상황 이모지 파네트 뱅크
+ */
+const EMOJI_PALETTES = [
+  ['🗣️', '💭', '🗯️', '📢', '🔥'],
+  ['🥸', '👀', '🤫', '🤐', '📜'],
+  ['🌪️', '⚡️', '💥', '🧨', '🎆'],
+  ['🎭', '🎪', '🎬', '🍿', '🎨'],
+  ['🌋', '☄️', '🔮', '✨', '🪐'],
+  ['👑', '🐴', '👂', '🎋', '📜'],
+  ['🦊', '🦝', '👺', '👻', '💀'],
+  ['🌊', '🏄‍♂️', '🏊‍♂️', '⛵️', '🏝️'],
+  ['🍷', '🍸', '🍺', '🍻', '🥳'],
+  ['☕️', '🍰', '🧁', '🍩', '🍫'],
+  ['💸', '🤑', '📉', '📈', '💎']
+];
+
+/**
+ * 문장 해시값을 기반으로 다채롭고 정교한 이모지 조합 생성
+ */
+const generateDynamicHashEmojis = (text) => {
+  let hash = 0;
+  for (let i = 0; i < text.length; i++) {
+    hash = text.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const positiveHash = Math.abs(hash);
+  const paletteIndex = positiveHash % EMOJI_PALETTES.length;
+  const selectedPalette = EMOJI_PALETTES[paletteIndex];
+
+  // 텍스트 길이에 따라 4~6개의 유동적 이모지 구성
+  const count = 4 + (text.length % 3);
+  const result = [];
+  for (let i = 0; i < count; i++) {
+    result.push(selectedPalette[(positiveHash + i) % selectedPalette.length]);
+  }
+
+  return Array.from(new Set(result)).join('');
+};
+
+/**
+ * 🎨 스마트 룰 기반 감정 및 키워드 매핑 Fallback 엔진
  */
 const fallbackRuleBasedConverter = (text) => {
   if (!text) return '🤐';
@@ -59,21 +88,21 @@ const fallbackRuleBasedConverter = (text) => {
     resultEmojis.push('🍱', '☕️', '🍺', '🍖', '🤤');
   }
 
-  // 매칭되는 키워드가 없을 경우 기본 상징 이모지 반환
-  if (resultEmojis.length === 0) {
-    resultEmojis.push('💬', '🎭', '⚡️', '👀', '💭');
-  }
-
-  const unique = Array.from(new Set(resultEmojis));
+  // 특정 정밀 키워드 조합
   if (t.includes('개자식') && t.includes('하품') && t.includes('죽')) {
     return '🦹🥱🙅‍♂️🪦👍';
   }
 
-  return unique.slice(0, 6).join('');
+  // 매칭되는 키워드가 없으면 문장 해시 기반 다채로운 이모지 콤보 반환 (고정 반복 100% 방지)
+  if (resultEmojis.length === 0) {
+    return generateDynamicHashEmojis(text);
+  }
+
+  return Array.from(new Set(resultEmojis)).slice(0, 6).join('');
 };
 
 /**
- * 🧹 순수 유니코드 그림 이모지 정제함수 (ASCII/알파벳/특수문자/Markdown 제거)
+ * 🧹 순수 유니코드 그림 이모지 정제함수
  */
 const extractPureEmojisOnly = (text) => {
   if (!text) return '';
@@ -109,7 +138,7 @@ Emoji Sequence:`;
         model: 'gemini-3.5-flash',
         contents: promptText,
         config: {
-          temperature: 0.6,
+          temperature: 0.7,
           maxOutputTokens: 50,
         }
       });
@@ -121,7 +150,7 @@ Emoji Sequence:`;
         return pureEmojis;
       }
     } catch (sdkError) {
-      // SDK 호출 실패 시 차선책 REST 엔드포인트 단일 호출로 직행
+      // SDK 예외 발생 시 REST 백업
       try {
         const restUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
         const res = await fetch(restUrl, {
@@ -129,7 +158,7 @@ Emoji Sequence:`;
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ parts: [{ text: promptText }] }],
-            generationConfig: { temperature: 0.6, maxOutputTokens: 50 }
+            generationConfig: { temperature: 0.7, maxOutputTokens: 50 }
           })
         });
 
@@ -142,12 +171,10 @@ Emoji Sequence:`;
             return pureEmojis;
           }
         }
-      } catch (restError) {
-        // 네트워크 장애 시 Fallback으로 전환
-      }
+      } catch (restError) {}
     }
   }
 
-  // [Step 2] API 키 미설정 또는 API 통신 장애 시 Fallback 스마트 룰 엔진 실행
+  // [Step 2] API Key 미설정 또는 네트워크 예외 시 문맥 및 해시 기반 이모지 생성 (중복 방지)
   return fallbackRuleBasedConverter(inputText);
 };
