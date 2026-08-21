@@ -42,7 +42,7 @@ const extractPureEmojisOnly = (text) => {
  * 🎨 최후의 네트워크 장애 대비 룰 엔진 (최소 4개 이모지 반환 보장)
  */
 const emergencyFallbackConverter = (text, reason = '네트워크 통신 지연') => {
-  console.log(`📢 [대체 이모지] AI 응답 대기/지연으로 룰 이모지를 생성했습니다.`);
+  console.log(`📢 [대체 이모지] AI 응답 대기/지연으로 룰 이모지를 생성했습니다. (사유: ${reason})`);
 
   if (!text) return '🤐💬👀💭';
   const emojis = ['🎭', '💬', '⚡️', '👀', '💭', '🔮', '✨', '🔥', '🏃‍♂️', '🤬', '🛑', '💥'];
@@ -109,6 +109,7 @@ Emoji Sequence (4-8 emojis):`;
     });
 
     const responseText = response?.text ? response.text.trim() : '';
+    const finishReason = response?.candidates?.[0]?.finishReason || 'STOP';
     let pureEmojis = extractPureEmojisOnly(responseText);
 
     if (pureEmojis && pureEmojis.length >= 1) {
@@ -127,6 +128,8 @@ Emoji Sequence (4-8 emojis):`;
       });
 
       return pureEmojis;
+    } else {
+      lastErrorMessage = `Gemini SDK 응답 빈값 (finishReason: ${finishReason})`;
     }
   } catch (sdkErr) {
     lastErrorMessage = sdkErr?.message || String(sdkErr);
@@ -146,6 +149,7 @@ Emoji Sequence (4-8 emojis):`;
       if (res.ok) {
         const data = await res.json();
         const responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        const finishReason = data?.candidates?.[0]?.finishReason || 'STOP';
         let pureEmojis = extractPureEmojisOnly(responseText);
 
         if (pureEmojis && pureEmojis.length >= 1) {
@@ -164,6 +168,8 @@ Emoji Sequence (4-8 emojis):`;
           });
 
           return pureEmojis;
+        } else {
+          lastErrorMessage = `Gemini REST 응답 빈값 (finishReason: ${finishReason})`;
         }
       } else {
         const errData = await res.json().catch(() => ({}));
