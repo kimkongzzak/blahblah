@@ -11,6 +11,7 @@ export default function App() {
   });
 
   const [messages, setMessages] = useState([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [page, setPage] = useState(0);
@@ -41,9 +42,11 @@ export default function App() {
       if (res.error) {
         setDbError(res.error);
         setMessages([]);
+        setTotalCount(0);
         setHasMore(false);
       } else {
         setMessages(res.data || []);
+        setTotalCount(res.totalCount || (res.data ? res.data.length : 0));
         setHasMore(res.hasMore);
       }
     } catch (err) {
@@ -89,10 +92,11 @@ export default function App() {
     }
   };
 
-  const handleMessageAdded = async ({ fromName, toName, emojiContent }) => {
-    const res = await createMessage({ fromName, toName, emojiContent });
+  const handleMessageAdded = async ({ fromName, toName, emojiContent, rawTextEncoded }) => {
+    const res = await createMessage({ fromName, toName, emojiContent, rawTextEncoded });
     if (res.success && res.message) {
       setMessages((prev) => [res.message, ...prev]);
+      setTotalCount((prev) => prev + 1);
       setDbError(null);
       return { success: true };
     } else {
@@ -106,6 +110,7 @@ export default function App() {
     const res = await deleteMessage(id);
     if (res.success) {
       setMessages((prev) => prev.filter((m) => m.id !== id));
+      setTotalCount((prev) => Math.max(0, prev - 1));
     } else {
       alert(res.error || '삭제에 실패했습니다.');
     }
@@ -125,6 +130,7 @@ export default function App() {
 
         <Timeline
           messages={messages}
+          totalCount={totalCount}
           loading={loading}
           loadingMore={loadingMore}
           hasMore={hasMore}

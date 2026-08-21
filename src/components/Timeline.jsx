@@ -4,6 +4,7 @@ import MessageCard from './MessageCard';
 
 export default function Timeline({
   messages,
+  totalCount = 0,
   loading,
   loadingMore,
   hasMore,
@@ -63,7 +64,7 @@ export default function Timeline({
         <div className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
           <span>🎋 대나무숲 피드</span>
           <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-mono">
-            {messages.length}개
+            총 {totalCount || messages.length}개
           </span>
         </div>
 

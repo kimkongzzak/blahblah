@@ -82,41 +82,43 @@ export const convertTextToEmoji = async (inputText) => {
     return emergencyFallbackConverter(inputText, 'Gemini API Key 미설정');
   }
 
-  const promptText = `Convert the following user input into a rich storytelling sequence of EXACTLY 4 to 8 vivid emojis.
+  // Vivid Storytelling Few-Shot Prompt for Gemini AI
+  const promptText = `You are a creative translator. Convert user input into a vivid storytelling sequence of 4 to 8 emojis.
 
-STRICT INSTRUCTIONS:
-- You MUST output EXACTLY between 4 and 8 emojis.
-- NEVER return a single emoji or less than 4 emojis. Single emoji output is STRICTLY FORBIDDEN.
-- Output ONLY valid unicode emojis. No words, no markdown, no quotes, no ASCII symbols like (*, :, (, )).
-- Express the subject, action, emotion, and story in a 4 to 8 emoji sequence.
+EXAMPLES:
+Input: "퇴근하고 구글 보고서 작성해야 함" -> 💼😴☕️🏃‍♂️💥
+Input: "니가 알아서 퇴사해 꾸역꾸역 다니지 말고" -> 🤬🚪🏃‍♂️💨🙅‍♂️
+Input: "점심에 맛있는 회식 고기 먹으러 가자" -> 🍱🍖🍺🤤🥳
+Input: "야근 지옥에서 언제 탈출하냐" -> 🪦💀☕️💥🏃‍♂️
+
+STRICT RULES:
+- Output ONLY valid unicode emojis (between 4 and 8 emojis).
+- NEVER append fixed repetitive emojis like (💬, 👀, 💭).
+- Express the action, emotion, and story naturally using unique, diverse emojis.
 
 User Input: "${inputText.replace(/"/g, '')}"
-Emoji Sequence (4-8 emojis):`;
+Emoji Sequence:`;
 
   let lastErrorMessage = '';
   const encodedInput = encodeSafeBase64(inputText);
 
-  // [1순위] Google 공식 @google/genai SDK로 gemini-3.5-flash AI 직접 호출 (maxOutputTokens: 300으로 넉넉하게 확장)
+  // [1순위] Google 공식 @google/genai SDK로 gemini-3.5-flash AI 직접 호출
   try {
     const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
       model: 'gemini-3.5-flash',
       contents: promptText,
       config: {
-        temperature: 0.7,
-        maxOutputTokens: 300, // maxOutputTokens를 300으로 대폭 확장하여 MAX_TOKENS 절단 원천 방지
+        temperature: 0.9,
+        maxOutputTokens: 300,
       }
     });
 
     const responseText = response?.text ? response.text.trim() : '';
     const finishReason = response?.candidates?.[0]?.finishReason || 'STOP';
-    let pureEmojis = extractPureEmojisOnly(responseText);
+    const pureEmojis = extractPureEmojisOnly(responseText);
 
     if (pureEmojis && pureEmojis.length >= 1) {
-      if (Array.from(pureEmojis).length < 4) {
-        pureEmojis += '💬👀💭⚡️'.substring(0, (4 - Array.from(pureEmojis).length) * 2);
-      }
-
       console.log(`✅ [Gemini AI 변환 성공] 입력: "${inputText}" ➡️ 이모지: ${pureEmojis}`);
 
       logAiExecution({
@@ -142,7 +144,7 @@ Emoji Sequence (4-8 emojis):`;
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: promptText }] }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 300 }
+          generationConfig: { temperature: 0.9, maxOutputTokens: 300 }
         })
       });
 
@@ -150,13 +152,9 @@ Emoji Sequence (4-8 emojis):`;
         const data = await res.json();
         const responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
         const finishReason = data?.candidates?.[0]?.finishReason || 'STOP';
-        let pureEmojis = extractPureEmojisOnly(responseText);
+        const pureEmojis = extractPureEmojisOnly(responseText);
 
         if (pureEmojis && pureEmojis.length >= 1) {
-          if (Array.from(pureEmojis).length < 4) {
-            pureEmojis += '💬👀💭⚡️'.substring(0, (4 - Array.from(pureEmojis).length) * 2);
-          }
-
           console.log(`✅ [Gemini AI 변환 성공] 입력: "${inputText}" ➡️ 이모지: ${pureEmojis}`);
 
           logAiExecution({
