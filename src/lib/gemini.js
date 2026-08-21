@@ -1,16 +1,34 @@
 import { GoogleGenAI } from '@google/genai';
 
+/**
+ * 🔑 Gemini API Key 획득 (환경 변수 최우선 적용)
+ */
 const getGeminiApiKey = () => {
-  return import.meta.env.VITE_GEMINI_API_KEY || localStorage.getItem('CUSTOM_GEMINI_API_KEY') || '';
+  const envKey = import.meta.env.VITE_GEMINI_API_KEY || '';
+  const localKey = localStorage.getItem('CUSTOM_GEMINI_API_KEY') || '';
+  const finalKey = (envKey || localKey).trim();
+
+  // 구버전 오타 키가 LocalStorage에 남아있을 경우 자동 정제
+  if (localKey && localKey.includes('5ivQ5')) {
+    try {
+      localStorage.removeItem('CUSTOM_GEMINI_API_KEY');
+    } catch (e) {}
+  }
+
+  return finalKey;
 };
 
+/**
+ * Gemini API Key 설정 유효성 검사
+ */
 export const isGeminiConfigured = () => {
   const key = getGeminiApiKey();
   return Boolean(key && key.length > 10 && !key.includes('your-gemini'));
 };
 
 /**
- * 룰 기반 감정 및 욕설/상황 키워드 매핑 Fallback 엔진 (실행속도 0.001초)
+ * 🎨 룰 기반 키워드/감정 매핑 Fallback 엔진
+ * API 통신 불가 시 0.001초 만에 문맥 반응형 이모지 반환
  */
 const fallbackRuleBasedConverter = (text) => {
   if (!text) return '🤐';
@@ -18,6 +36,7 @@ const fallbackRuleBasedConverter = (text) => {
   const t = text.toLowerCase();
   const resultEmojis = [];
 
+  // 감정/욕설/상황 키워드 카테고리 매핑
   if (/개자식|시발|씨발|새끼|존나|좆|미친|병신|개새|미친놈|싸가지|지랄|엿/.test(t)) {
     resultEmojis.push('🦹', '🤬', '🖕', '🔥', '💥');
   }
@@ -40,6 +59,7 @@ const fallbackRuleBasedConverter = (text) => {
     resultEmojis.push('🍱', '☕️', '🍺', '🍖', '🤤');
   }
 
+  // 매칭되는 키워드가 없을 경우 기본 상징 이모지 반환
   if (resultEmojis.length === 0) {
     resultEmojis.push('💬', '🎭', '⚡️', '👀', '💭');
   }
@@ -53,17 +73,17 @@ const fallbackRuleBasedConverter = (text) => {
 };
 
 /**
- * Extract ONLY pure Unicode Pictographic Emojis
+ * 🧹 순수 유니코드 그림 이모지 정제함수 (ASCII/알파벳/특수문자/Markdown 제거)
  */
 const extractPureEmojisOnly = (text) => {
   if (!text) return '';
   const matched = text.match(/\p{Extended_Pictographic}/gu);
-  if (matched && matched.length > 0) {
-    return matched.join('');
-  }
-  return '';
+  return matched && matched.length > 0 ? matched.join('') : '';
 };
 
+/**
+ * 🚀 텍스트 입력값 -> 스토리텔링 이모지 시퀀스 변환 메인 함수
+ */
 export const convertTextToEmoji = async (inputText) => {
   if (!inputText || inputText.trim() === '') {
     return '🤐';
@@ -82,10 +102,9 @@ CRITICAL INSTRUCTIONS:
 User Input: "${inputText.replace(/"/g, '')}"
 Emoji Sequence:`;
 
-    // 1. Try Google's Official @google/genai SDK with model 'gemini-3.5-flash'
+    // [Step 1] 구글 공식 @google/genai SDK로 최신 모델 gemini-3.5-flash 호출
     try {
-      const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
-      
+      const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model: 'gemini-3.5-flash',
         contents: promptText,
@@ -95,39 +114,40 @@ Emoji Sequence:`;
         }
       });
 
-      const responseText = response.text ? response.text.trim() : '';
+      const responseText = response?.text ? response.text.trim() : '';
       const pureEmojis = extractPureEmojisOnly(responseText);
 
       if (pureEmojis && pureEmojis.length >= 1) {
-        return pureEmojis; // Immediate return on success
+        return pureEmojis;
       }
-    } catch (err) {
-      console.warn('[SDK failover to REST]', err);
-    }
+    } catch (sdkError) {
+      // SDK 호출 실패 시 차선책 REST 엔드포인트 단일 호출로 직행
+      try {
+        const restUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
+        const res = await fetch(restUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: promptText }] }],
+            generationConfig: { temperature: 0.6, maxOutputTokens: 50 }
+          })
+        });
 
-    // 2. Direct REST call ONLY for gemini-3.5-flash (No secondary deprecated model calls)
-    try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey.trim()}`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: promptText }] }],
-          generationConfig: { temperature: 0.6, maxOutputTokens: 50 }
-        })
-      });
+        if (res.ok) {
+          const data = await res.json();
+          const responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          const pureEmojis = extractPureEmojisOnly(responseText);
 
-      if (res.ok) {
-        const data = await res.json();
-        const responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        const pureEmojis = extractPureEmojisOnly(responseText);
-
-        if (pureEmojis && pureEmojis.length >= 1) {
-          return pureEmojis;
+          if (pureEmojis && pureEmojis.length >= 1) {
+            return pureEmojis;
+          }
         }
+      } catch (restError) {
+        // 네트워크 장애 시 Fallback으로 전환
       }
-    } catch (e) {}
+    }
   }
 
+  // [Step 2] API 키 미설정 또는 API 통신 장애 시 Fallback 스마트 룰 엔진 실행
   return fallbackRuleBasedConverter(inputText);
 };
