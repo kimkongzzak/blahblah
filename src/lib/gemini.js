@@ -8,7 +8,7 @@ export const isGeminiConfigured = () => {
 };
 
 /**
- * 룰 기반 감정 및 욕설/상황 키워드 매핑 Fallback 엔진 (실행속도 0.001초)
+ * 룰 기반 감정 및 욕설/상황 키워드 매핑 Fallback 엔진
  */
 const fallbackRuleBasedConverter = (text) => {
   if (!text) return '🤐';
@@ -63,12 +63,12 @@ const extractPureEmojisOnly = (text) => {
 };
 
 /**
- * Google AI Studio v1 Official Production Endpoints (Resolves 404 v1beta mismatch)
+ * Diagnostic Targets (Probing v1 & v1beta endpoints with transparent log inspection)
  */
-const TARGET_ENDPOINTS = [
+const PROBE_ENDPOINTS = [
+  { version: 'v1beta', model: 'gemini-1.5-flash' },
   { version: 'v1', model: 'gemini-1.5-flash' },
-  { version: 'v1', model: 'gemini-1.5-pro' },
-  { version: 'v1beta', model: 'gemini-1.5-flash' }
+  { version: 'v1beta', model: 'gemini-1.5-pro' }
 ];
 
 export const convertTextToEmoji = async (inputText) => {
@@ -78,8 +78,17 @@ export const convertTextToEmoji = async (inputText) => {
 
   const apiKey = getGeminiApiKey();
 
-  if (isGeminiConfigured()) {
-    const promptText = `Convert user input into a sequence of 4 to 8 vivid storytelling emojis representing emotions and actions.
+  console.group('🔍 [Gemini API 통신 정밀 진단 Log]');
+  console.log('1. API Key 존재 여부:', Boolean(apiKey));
+  console.log('2. API Key 자릿수:', apiKey ? `${apiKey.length}자` : '0자 (키 누락)');
+
+  if (!isGeminiConfigured()) {
+    console.warn('⚠️ Gemini API Key가 유효하지 않거나 설정되지 않아 룰 엔진으로 즉시 변환합니다.');
+    console.groupEnd();
+    return fallbackRuleBasedConverter(inputText);
+  }
+
+  const promptText = `Convert user input into a sequence of 4 to 8 vivid storytelling emojis representing emotions and actions.
 
 CRITICAL INSTRUCTIONS:
 - Output ONLY valid unicode emojis.
@@ -89,40 +98,52 @@ CRITICAL INSTRUCTIONS:
 User Input: "${inputText.replace(/"/g, '')}"
 Emoji Sequence:`;
 
-    // Try Google AI Studio official 'v1' endpoints first
-    for (const ep of TARGET_ENDPOINTS) {
-      try {
-        const url = `https://generativelanguage.googleapis.com/${ep.version}/models/${ep.model}:generateContent?key=${apiKey}`;
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: promptText }] }],
-            generationConfig: {
-              temperature: 0.6,
-              maxOutputTokens: 50
-            }
-          })
-        });
+  for (const ep of PROBE_ENDPOINTS) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${ep.model}:generateContent?key=${apiKey}`;
+    console.log(`📡 시도 중인 API URL: https://generativelanguage.googleapis.com/${ep.version}/models/${ep.model}:generateContent`);
 
-        if (res.ok) {
-          const data = await res.json();
-          const responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-          const pureEmojis = extractPureEmojisOnly(responseText);
-
-          if (pureEmojis && pureEmojis.length >= 1) {
-            return pureEmojis;
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/${ep.version}/models/${ep.model}:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: promptText }] }],
+          generationConfig: {
+            temperature: 0.6,
+            maxOutputTokens: 50
           }
-        } else {
-          const errJson = await res.json().catch(() => ({}));
-          console.error(`[Gemini API ${ep.version}/${ep.model}] Status ${res.status}:`, errJson?.error?.message || 'Error');
+        })
+      });
+
+      console.log(`📊 구글 응답 상태코드 (HTTP Status): ${res.status} ${res.statusText}`);
+
+      if (res.ok) {
+        const data = await res.json();
+        console.log('✅ Google API 응답 수신 성공:', data);
+
+        const responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        const pureEmojis = extractPureEmojisOnly(responseText);
+
+        if (pureEmojis && pureEmojis.length >= 1) {
+          console.log('🎉 최종 이모지 추출 결과:', pureEmojis);
+          console.groupEnd();
+          return pureEmojis;
         }
-      } catch (err) {
-        console.error(`[Gemini API ${ep.version}/${ep.model}] Network error:`, err);
+      } else {
+        const errorJson = await res.json().catch(() => ({}));
+        console.error(`❌ 구글 API 서버 에러 상세 [Status ${res.status}]:`, errorJson);
+        if (errorJson?.error) {
+          console.error(`└─ 원인 메시지: "${errorJson.error.message}"`);
+          console.error(`└─ 에러 상태: "${errorJson.error.status}"`);
+        }
       }
+    } catch (err) {
+      console.error('❌ 네트워크 통신 자체가 실패함:', err);
     }
   }
 
-  // Fallback Rule-based execution
+  console.warn('⚠️ 모든 Gemini API 모델 통신이 실패하여 Fallback 스마트 룰 엔진 결과를 반환합니다.');
+  console.groupEnd();
+
   return fallbackRuleBasedConverter(inputText);
 };
