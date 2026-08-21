@@ -72,9 +72,10 @@ export default function MessageCard({ message, isAdmin, onDelete }) {
   const emojiArray = Array.from(message.emoji_content || '');
 
   return (
-    <div className="py-3 px-3.5 border-b border-slate-200/80 dark:border-slate-800 transition">
-      {/* Header: FROM -> TO Order */}
-      <div className="flex items-center justify-between text-xs mb-1.5">
+    // Restored outer feed card container
+    <div className="corporate-card p-3.5 hover:shadow-sm transition">
+      {/* Header: FROM -> TO */}
+      <div className="flex items-center justify-between text-xs mb-2 pb-1.5 border-b border-slate-100 dark:border-slate-800">
         <div className="flex items-center space-x-1.5 font-medium text-slate-700 dark:text-slate-300">
           <span className="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-0.5">
             🎭 {message.from_name || '익명'}
@@ -103,8 +104,8 @@ export default function MessageCard({ message, isAdmin, onDelete }) {
         </div>
       </div>
 
-      {/* Main Emoji Display (No card background, clean speech flow) */}
-      <div className="my-1.5 py-1">
+      {/* Main Emoji Display: ONLY inner background & inner border removed as requested */}
+      <div className="my-2.5 px-1 py-1">
         <div className="flex flex-wrap items-center gap-1.5 text-2xl tracking-wide select-all">
           {emojiArray.map((emo, idx) => (
             <span key={idx}>{emo}</span>
@@ -113,14 +114,14 @@ export default function MessageCard({ message, isAdmin, onDelete }) {
       </div>
 
       {/* Actions */}
-      <div className="flex items-center justify-between text-xs pt-0.5 pb-1">
+      <div className="flex items-center justify-between text-xs pt-1 pb-1.5">
         <div className="flex items-center space-x-2">
           <button
             onClick={handleLike}
             className={`flex items-center space-x-1 px-2 py-0.5 rounded text-xs font-medium transition ${
               hasLiked
-                ? 'text-emerald-600 dark:text-emerald-400'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                ? 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400'
+                : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
           >
             <ThumbsUp className={`w-3 h-3 ${hasLiked ? 'fill-current' : ''}`} />
@@ -129,7 +130,7 @@ export default function MessageCard({ message, isAdmin, onDelete }) {
 
           <button
             onClick={handleCopy}
-            className="flex items-center space-x-1 px-2 py-0.5 rounded text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition"
+            className="flex items-center space-x-1 px-2 py-0.5 rounded text-xs text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
           >
             {copied ? (
               <span className="text-emerald-600 font-medium">복사됨</span>
@@ -145,17 +146,17 @@ export default function MessageCard({ message, isAdmin, onDelete }) {
         </div>
       </div>
 
-      {/* Auto-Expanded Comments List */}
-      <div className="mt-1 pt-1.5 space-y-1.5">
+      {/* Comments List */}
+      <div className="mt-1.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 space-y-2">
         {commentsList.length > 0 && (
-          <div className="space-y-1 my-1">
+          <div className="space-y-1.5 mb-2">
             {commentsList.map((c) => (
               <div
                 key={c.id}
-                className="py-1 text-xs flex items-start justify-between"
+                className="px-2.5 py-1.5 rounded-lg bg-slate-50/80 dark:bg-slate-800/50 text-xs flex items-start justify-between"
               >
                 <div>
-                  <span className="font-semibold text-slate-800 dark:text-slate-200 mr-1 text-[11px]">
+                  <span className="font-semibold text-slate-800 dark:text-slate-200 mr-1.5 text-[11px]">
                     💬 {c.author_name || '익명'}:
                   </span>
                   <span className="text-slate-700 dark:text-slate-300 text-xs">
@@ -180,7 +181,7 @@ export default function MessageCard({ message, isAdmin, onDelete }) {
         )}
 
         {/* Add Comment Form */}
-        <form onSubmit={handleAddComment} className="flex items-center gap-1.5 pt-0.5">
+        <form onSubmit={handleAddComment} className="flex items-center gap-1.5">
           <input
             type="text"
             placeholder="닉네임"
