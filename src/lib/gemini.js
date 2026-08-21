@@ -63,8 +63,14 @@ const extractPureEmojisOnly = (text) => {
 };
 
 /**
- * Single High-Speed Direct Fetch with 1.2-second strict AbortController Timeout
+ * Super Light & Fast Gemini Models List (Thinking-free 200ms ultra light models)
  */
+const LIGHT_FAST_MODELS = [
+  'gemini-1.5-flash-8b',
+  'gemini-2.0-flash-exp',
+  'gemini-1.5-flash-latest'
+];
+
 export const convertTextToEmoji = async (inputText) => {
   if (!inputText || inputText.trim() === '') {
     return '🤐';
@@ -73,44 +79,46 @@ export const convertTextToEmoji = async (inputText) => {
   const apiKey = getGeminiApiKey();
 
   if (isGeminiConfigured()) {
-    const promptText = `Convert input into 4 to 8 vivid storytelling emojis only. No text, no quotes. Input: "${inputText.replace(/"/g, '')}"`;
+    const promptText = `Convert user input into a sequence of 4 to 8 vivid storytelling emojis representing emotions and actions.
 
-    // Try fast model with strict 1.2s AbortController timeout to guarantee instant response
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 1200);
+CRITICAL INSTRUCTIONS:
+- Output ONLY valid unicode emojis.
+- Do NOT output words, markdown, ASCII symbols like (*, :, (, )), or reasoning text.
+- Do NOT explain your thought process.
 
-    try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: controller.signal,
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: promptText }] }],
-          generationConfig: {
-            temperature: 0.5,
-            maxOutputTokens: 30
+User Input: "${inputText.replace(/"/g, '')}"
+Emoji Sequence:`;
+
+    // Try super light models without thinking delay
+    for (const modelName of LIGHT_FAST_MODELS) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: promptText }] }],
+            generationConfig: {
+              temperature: 0.5,
+              maxOutputTokens: 30
+            }
+          })
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          const pureEmojis = extractPureEmojisOnly(responseText);
+
+          if (pureEmojis && pureEmojis.length >= 1) {
+            return pureEmojis;
           }
-        })
-      });
-
-      clearTimeout(timeoutId);
-
-      if (res.ok) {
-        const data = await res.json();
-        const responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        const pureEmojis = extractPureEmojisOnly(responseText);
-
-        if (pureEmojis && pureEmojis.length >= 1) {
-          return pureEmojis;
         }
+      } catch (err) {
+        // fast failover
       }
-    } catch (err) {
-      // Aborted or network error -> fallback instantly
-      clearTimeout(timeoutId);
     }
   }
 
-  // Instant 0.001s fallback
   return fallbackRuleBasedConverter(inputText);
 };
