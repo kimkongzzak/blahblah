@@ -18,31 +18,45 @@ export default function Timeline({
   const observerTarget = useRef(null);
 
   useEffect(() => {
+    // Stop infinite scroll observer if there is a DB error or no more pages
+    if (dbError || !hasMore || loadingMore || loading) return;
+
     const target = observerTarget.current;
     if (!target) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && hasMore && !loadingMore && !loading) {
+        if (entries[0].isIntersecting && hasMore && !loadingMore && !loading && !dbError) {
           onLoadMore();
         }
       },
-      { threshold: 0.2, rootMargin: '100px' }
+      { threshold: 0.1, rootMargin: '50px' }
     );
 
     observer.observe(target);
     return () => { if (target) observer.unobserve(target); };
-  }, [hasMore, loadingMore, loading, onLoadMore]);
+  }, [hasMore, loadingMore, loading, dbError, onLoadMore]);
 
   return (
     <div className="space-y-3">
-      {/* DB Exception Error Alert Banner */}
+      {/* DB Error Alert with Manual Retry */}
       {dbError && (
-        <div className="p-3 rounded-lg bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-200 text-xs font-mono flex items-start space-x-2">
-          <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <span className="font-bold block mb-0.5">DB 연동 오류 발생:</span>
-            <span>{dbError}</span>
+        <div className="p-3 rounded-lg bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-200 text-xs font-mono space-y-2">
+          <div className="flex items-start space-x-2">
+            <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <span className="font-bold block mb-0.5">DB 연동 오류 (자동 호출 중단됨):</span>
+              <span>{dbError}</span>
+            </div>
+          </div>
+          <div className="flex justify-end pt-1">
+            <button
+              onClick={onRefresh}
+              className="px-3 py-1 rounded bg-rose-600 hover:bg-rose-700 text-white font-sans text-xs font-medium transition flex items-center gap-1"
+            >
+              <RefreshCw className="w-3 h-3" />
+              <span>재시도</span>
+            </button>
           </div>
         </div>
       )}
@@ -86,7 +100,7 @@ export default function Timeline({
         </div>
       ) : messages.length === 0 ? (
         <div className="corporate-card p-6 text-center text-xs text-slate-400">
-          등록된 피드가 없습니다.
+          {dbError ? 'DB 오류로 데이터를 불러올 수 없습니다.' : '등록된 피드가 없습니다.'}
         </div>
       ) : (
         <div className="space-y-2.5">
@@ -101,14 +115,17 @@ export default function Timeline({
         </div>
       )}
 
-      <div ref={observerTarget} className="py-2 text-center">
-        {loadingMore && (
-          <div className="flex items-center justify-center space-x-1 text-xs text-slate-400">
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
-            <span>로딩 중...</span>
-          </div>
-        )}
-      </div>
+      {/* Infinite Scroll Trigger - Only show when no error */}
+      {!dbError && (
+        <div ref={observerTarget} className="py-2 text-center">
+          {loadingMore && (
+            <div className="flex items-center justify-center space-x-1 text-xs text-slate-400">
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
+              <span>로딩 중...</span>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

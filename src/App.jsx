@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import MessageForm from './components/MessageForm';
 import Timeline from './components/Timeline';
@@ -15,7 +15,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [page, setPage] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
+  const [hasMore, setHasMore] = useState(false);
   const [searchTo, setSearchTo] = useState('');
   const [dbError, setDbError] = useState(null);
 
@@ -34,7 +34,8 @@ export default function App() {
     }
   }, [darkMode]);
 
-  const loadInitialData = useCallback(async (searchTerm = searchTo) => {
+  // Initial load Function with explicit error kill-switch
+  const loadInitialData = async (searchTerm = searchTo) => {
     setLoading(true);
     setPage(0);
     setDbError(null);
@@ -43,39 +44,51 @@ export default function App() {
       if (res.error) {
         setDbError(res.error);
         setMessages([]);
+        setHasMore(false); // STOP all future requests
       } else {
         setMessages(res.data || []);
         setHasMore(res.hasMore);
       }
     } catch (err) {
       setDbError(`[오류] ${err.message}`);
+      setHasMore(false);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Debounced search trigger (Safe single execution)
+  useEffect(() => {
+    let isMounted = true;
+    const timer = setTimeout(() => {
+      if (isMounted) {
+        loadInitialData(searchTo);
+      }
+    }, 300);
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
   }, [searchTo]);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      loadInitialData(searchTo);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [searchTo, loadInitialData]);
-
+  // Load more with strict guard against infinite loops
   const handleLoadMore = async () => {
-    if (loadingMore || !hasMore) return;
+    if (loadingMore || !hasMore || dbError) return;
     setLoadingMore(true);
     const nextPage = page + 1;
     try {
       const res = await fetchMessages({ page: nextPage, limit: 10, searchTo });
       if (res.error) {
         setDbError(res.error);
+        setHasMore(false); // STOP future requests on error
       } else {
         setMessages((prev) => [...prev, ...(res.data || [])]);
         setPage(nextPage);
         setHasMore(res.hasMore);
       }
     } catch (err) {
-      console.error(err);
+      setDbError(`[오류] ${err.message}`);
+      setHasMore(false);
     } finally {
       setLoadingMore(false);
     }
@@ -93,7 +106,7 @@ export default function App() {
   };
 
   const handleDeleteMessage = async (id) => {
-    if (!window.window.confirm('이 메시지를 삭제하시겠습니까?')) return;
+    if (!window.confirm('이 메시지를 삭제하시겠습니까?')) return;
 
     const res = await deleteMessage(id);
     if (res.success) {
