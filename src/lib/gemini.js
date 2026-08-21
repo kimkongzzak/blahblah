@@ -53,17 +53,49 @@ const fallbackRuleBasedConverter = (text) => {
 };
 
 /**
- * Dynamic Multi-Model Cascade Engine
- * 모델명 404/deprecated 이슈에 100% 자동 유연 대응하는 자가 치유 폴백 루프
+ * 🔮 Truly Dynamic Model Discovery
+ * 구글 서버에 실시간 문의(ListModels API)하여 현재 사용 가능한 최신 active Gemini 모델을 동적으로 획득.
+ * 향후 새로운 모델이 출시되거나 기존 모델이 deprecated 되어도 코드 수정 0번!
  */
-const CANDIDATE_MODELS = [
-  'gemini-2.5-flash',
-  'gemini-2.0-flash',
-  'gemini-1.5-flash-latest',
-  'gemini-1.5-flash',
-  'gemini-1.5-pro',
-  'gemini-pro'
-];
+let cachedDynamicModelName = null;
+
+const fetchActiveGeminiModel = async (apiKey) => {
+  if (cachedDynamicModelName) {
+    return cachedDynamicModelName;
+  }
+
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+    if (res.ok) {
+      const data = await res.json();
+      const models = data.models || [];
+
+      // Filter models that support generateContent and contain 'gemini'
+      const validModels = models.filter(m => 
+        m.name && 
+        m.name.includes('gemini') && 
+        Array.isArray(m.supportedGenerationMethods) &&
+        m.supportedGenerationMethods.includes('generateContent')
+      );
+
+      // Prioritize flash models, then pro models, then any valid gemini model
+      const flashModel = validModels.find(m => m.name.includes('flash'));
+      const proModel = validModels.find(m => m.name.includes('pro'));
+      const chosen = flashModel || proModel || validModels[0];
+
+      if (chosen && chosen.name) {
+        // Strip 'models/' prefix if present for SDK usage
+        cachedDynamicModelName = chosen.name.replace('models/', '');
+        return cachedDynamicModelName;
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to dynamically list models from Google API:', e);
+  }
+
+  // Fallback default
+  return 'gemini-1.5-flash-latest';
+};
 
 export const convertTextToEmoji = async (inputText) => {
   if (!inputText || inputText.trim() === '') {
@@ -73,8 +105,12 @@ export const convertTextToEmoji = async (inputText) => {
   const apiKey = getGeminiApiKey();
 
   if (isGeminiConfigured()) {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const prompt = `System Rule: You are an expert translator that converts user input (which may contain raw emotions, corporate stress, insults, complaints, or jokes) exclusively into a sequence of vivid, storytelling emojis.
+    try {
+      const activeModelName = await fetchActiveGeminiModel(apiKey);
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: activeModelName });
+
+      const prompt = `System Rule: You are an expert translator that converts user input (which may contain raw emotions, corporate stress, insults, complaints, or jokes) exclusively into a sequence of vivid, storytelling emojis.
       
 Rules:
 1. Output ONLY emojis. No text, no markdown, no quotes, no explanations, no spaces between emojis unless necessary.
@@ -85,24 +121,20 @@ Rules:
 User Input: "${inputText.replace(/"/g, '')}"
 Emoji Sequence Output:`;
 
-    // Try candidate models sequentially until success
-    for (const modelName of CANDIDATE_MODELS) {
-      try {
-        const model = genAI.getGenerativeModel({ model: modelName });
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        const text = response.text() ? response.text().trim() : '';
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text() ? response.text().trim() : '';
 
-        const emojiOnly = text.replace(/[a-zA-Z0-9\s.,!?"'가-힣]/g, '');
-        if (emojiOnly && emojiOnly.length >= 1) {
-          return emojiOnly;
-        }
-      } catch (err) {
-        console.warn(`[Gemini Dynamic Cascade] Model '${modelName}' call failed (${err.message}), trying next model...`);
+      const emojiOnly = text.replace(/[a-zA-Z0-9\s.,!?"'가-힣]/g, '');
+      if (emojiOnly && emojiOnly.length >= 1) {
+        return emojiOnly;
       }
+    } catch (err) {
+      console.warn(`[Dynamic Gemini API] Call failed with model:`, err);
+      // Invalidate cache if model fails and fallback to rule-based
+      cachedDynamicModelName = null;
     }
   }
 
-  // Fallback Rule-based execution if all Gemini models fail or API key missing
   return fallbackRuleBasedConverter(inputText);
 };
