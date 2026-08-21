@@ -54,24 +54,9 @@ export default function MessageForm({ onMessageAdded }) {
           </div>
         )}
 
-        {/* Inputs: 🗑️ Target & 🎭 From */}
+        {/* Inputs Row: 1) FROM (Left), 2) TO (Right) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {/* 🗑️ Trash Target (TO) */}
-          <div className="relative">
-            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm select-none">
-              🗑️
-            </span>
-            <input
-              type="text"
-              value={toName}
-              onChange={(e) => setToName(e.target.value)}
-              placeholder="버릴 대상 (TO)"
-              maxLength={25}
-              className="w-full pl-8 pr-3 py-1.5 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-            />
-          </div>
-
-          {/* 🎭 From */}
+          {/* 🎭 FROM */}
           <div className="relative">
             <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm select-none">
               🎭
@@ -80,14 +65,29 @@ export default function MessageForm({ onMessageAdded }) {
               type="text"
               value={fromName}
               onChange={(e) => setFromName(e.target.value)}
-              placeholder="보내는이 (FROM / 기본: 익명)"
+              placeholder="FROM (기본: 익명)"
               maxLength={20}
+              className="w-full pl-8 pr-3 py-1.5 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            />
+          </div>
+
+          {/* 🗑️ TO */}
+          <div className="relative">
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm select-none">
+              🗑️
+            </span>
+            <input
+              type="text"
+              value={toName}
+              onChange={(e) => setToName(e.target.value)}
+              placeholder="TO (대상)"
+              maxLength={25}
               className="w-full pl-8 pr-3 py-1.5 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500"
             />
           </div>
         </div>
 
-        {/* 💬 Speech Bubble Style Secret Message Box */}
+        {/* 💬 Speech Bubble Secret Box */}
         <div className="relative group">
           <div className="absolute -top-2 left-6 w-3 h-3 bg-slate-100 dark:bg-slate-800 border-t border-l border-slate-200 dark:border-slate-700 rotate-45 z-10" />
           
@@ -95,7 +95,7 @@ export default function MessageForm({ onMessageAdded }) {
             <textarea
               value={rawContent}
               onChange={(e) => setRawContent(e.target.value)}
-              placeholder="💬 털어놓을 욕/속마음을 써보세요... (이모지로 정제되어 털어버립니다)"
+              placeholder="💬 털어놓을 욕/속마음을 써보세요..."
               rows={3}
               maxLength={200}
               className="w-full p-3 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/80 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition resize-none shadow-inner"
@@ -106,7 +106,7 @@ export default function MessageForm({ onMessageAdded }) {
         {/* Submit Button */}
         <div className="flex items-center justify-between pt-0.5">
           <span className="text-[10px] text-slate-400">
-            🔒 원문은 삭감되고 <b>이모지</b>만 피드에 털어집니다.
+            🔒 이모지로 변환 저장
           </span>
 
           <button
@@ -117,7 +117,7 @@ export default function MessageForm({ onMessageAdded }) {
             {isSubmitting ? (
               <>
                 <Sparkles className="w-3.5 h-3.5 animate-spin" />
-                <span>털어내는 중...</span>
+                <span>변환 중...</span>
               </>
             ) : (
               <>

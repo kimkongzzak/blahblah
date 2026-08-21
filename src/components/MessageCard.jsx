@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ThumbsUp, Copy, Clock, Trash2, MessageCircle, Send } from 'lucide-react';
+import { ThumbsUp, Copy, Clock, Trash2, MessageCircle, Send, ArrowRight } from 'lucide-react';
 import { incrementLike, addComment, deleteComment } from '../lib/supabase';
 
 function formatTimeAgo(dateString) {
@@ -73,14 +73,15 @@ export default function MessageCard({ message, isAdmin, onDelete }) {
 
   return (
     <div className="corporate-card p-3.5 hover:shadow-sm transition">
-      {/* Header: Trash Target & From */}
+      {/* Header: FROM -> TO Order Restored */}
       <div className="flex items-center justify-between text-xs mb-2 pb-1.5 border-b border-slate-100 dark:border-slate-800">
         <div className="flex items-center space-x-1.5 font-medium text-slate-700 dark:text-slate-300">
+          <span className="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-0.5">
+            🎭 {message.from_name || '익명'}
+          </span>
+          <ArrowRight className="w-3 h-3 text-slate-400" />
           <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[11px] font-semibold border border-emerald-100 dark:border-emerald-900/40">
             🗑️ @{message.to_name || '누군가'}
-          </span>
-          <span className="text-[11px] text-slate-400">
-            (by 🎭 {message.from_name || '익명'})
           </span>
         </div>
 
@@ -102,7 +103,7 @@ export default function MessageCard({ message, isAdmin, onDelete }) {
         </div>
       </div>
 
-      {/* Main Emoji Story in Speech Bubble Container */}
+      {/* Speech Bubble Emoji Display */}
       <div className="my-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/60 relative">
         <div className="flex flex-wrap items-center gap-1.5 text-2xl tracking-wide select-all">
           {emojiArray.map((emo, idx) => (
@@ -144,7 +145,7 @@ export default function MessageCard({ message, isAdmin, onDelete }) {
         </div>
       </div>
 
-      {/* Auto-Expanded Comments List */}
+      {/* Comments List */}
       <div className="mt-1.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 space-y-2">
         {commentsList.length > 0 && (
           <div className="space-y-1.5 mb-2">
