@@ -1,12 +1,4 @@
 const getGeminiApiKey = () => {
-  // Clear any old typos stored in LocalStorage
-  try {
-    const localKey = localStorage.getItem('CUSTOM_GEMINI_API_KEY');
-    if (localKey && localKey.includes('5ivQ5')) {
-      localStorage.removeItem('CUSTOM_GEMINI_API_KEY');
-    }
-  } catch (e) {}
-
   return import.meta.env.VITE_GEMINI_API_KEY || localStorage.getItem('CUSTOM_GEMINI_API_KEY') || '';
 };
 
@@ -71,9 +63,9 @@ const extractPureEmojisOnly = (text) => {
 };
 
 const TARGET_MODELS = [
+  { version: 'v1beta', name: 'gemini-1.5-flash' },
   { version: 'v1beta', name: 'gemini-2.0-flash' },
   { version: 'v1beta', name: 'gemini-2.5-flash' },
-  { version: 'v1beta', name: 'gemini-1.5-flash' },
   { version: 'v1', name: 'gemini-1.5-flash' }
 ];
 
@@ -97,10 +89,14 @@ Emoji Sequence:`;
 
     for (const item of TARGET_MODELS) {
       try {
-        const url = `https://generativelanguage.googleapis.com/${item.version}/models/${item.name}:generateContent?key=${apiKey.trim()}`;
+        const url = `https://generativelanguage.googleapis.com/${item.version}/models/${item.name}:generateContent`;
         const res = await fetch(url, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'x-goog-api-key': apiKey.trim(),
+            'x-goog-api-client': 'genai-js'
+          },
           body: JSON.stringify({
             contents: [{ parts: [{ text: promptText }] }],
             generationConfig: {
@@ -117,6 +113,26 @@ Emoji Sequence:`;
 
           if (pureEmojis && pureEmojis.length >= 1) {
             return pureEmojis;
+          }
+        } else {
+          // Retry with query param if header rejected
+          const queryUrl = `${url}?key=${apiKey.trim()}`;
+          const qRes = await fetch(queryUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: promptText }] }],
+              generationConfig: { temperature: 0.6, maxOutputTokens: 50 }
+            })
+          });
+
+          if (qRes.ok) {
+            const data = await qRes.json();
+            const responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            const pureEmojis = extractPureEmojisOnly(responseText);
+            if (pureEmojis && pureEmojis.length >= 1) {
+              return pureEmojis;
+            }
           }
         }
       } catch (err) {
