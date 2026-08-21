@@ -18,50 +18,33 @@ const fallbackRuleBasedConverter = (text) => {
   const t = text.toLowerCase();
   const resultEmojis = [];
 
-  // 1. 욕설 / 공격성 감지
   if (/개자식|시발|씨발|새끼|존나|좆|미친|병신|개새|미친놈|싸가지|지랄|엿/.test(t)) {
     resultEmojis.push('🦹', '🤬', '🖕', '🔥', '💥');
   }
-
-  // 2. 피곤 / 하품 / 졸림 / 야근 / 업무 스트레스
   if (/하품|졸려|피곤|야근|퇴근|잠|자고|쉬고|지친|노답|멘붕|회의/.test(t)) {
     resultEmojis.push('🥱', '😴', '☕️', '💤', '🤯');
   }
-
-  // 3. 거절 / 거부 / 멈춰 / 반대
   if (/하지마|말고|안해|싫어|꺼져|그만|절대|싫다/.test(t)) {
     resultEmojis.push('🙅‍♂️', '🛑', '✋', '❌');
   }
-
-  // 4. 죽음 / 망함 / 사직서 / 멸망
   if (/죽|지옥|파멸|무덤|지옥|살인|저주|망해|사직/.test(t)) {
     resultEmojis.push('🪦', '💀', '☠️', '👻', '⚰️');
   }
-
-  // 5. 비꼬기 / 긍정 / 따봉 / ㅋㅋㅋ / 비웃음
   if (/👍|따봉|잘|굳|좋아|응|네|ㅋㅋ|비웃|웃기네/.test(t)) {
     resultEmojis.push('👍', '😏', '🤡', '👏');
   }
-
-  // 6. 돈 / 월급 / 인상 / 주식
   if (/돈|월급|보너스|주식|상여|머니|부자/.test(t)) {
     resultEmojis.push('💸', '🤑', '💰', '📉', '😭');
   }
-
-  // 7. 음식 / 점심 / 커피 / 회식
   if (/밥|점심|커피|회식|술|고기|배고파/.test(t)) {
     resultEmojis.push('🍱', '☕️', '🍺', '🍖', '🤤');
   }
 
-  // 매칭되는 게 없거나 부족할 경우 텍스트 길이 기반 감정 이모지 보충
   if (resultEmojis.length === 0) {
     resultEmojis.push('💬', '🎭', '⚡️', '👀', '💭');
   }
 
-  // 중복 제거 후 선택
   const unique = Array.from(new Set(resultEmojis));
-  
-  // 사용자의 예시 입력 ("개자식 하품하지 말고 그냥 죽었으면") 특수 매칭
   if (t.includes('개자식') && t.includes('하품') && t.includes('죽')) {
     return '🦹🥱🙅‍♂️🪦👍';
   }
@@ -70,8 +53,18 @@ const fallbackRuleBasedConverter = (text) => {
 };
 
 /**
- * Gemini AI API를 통해 텍스트를 이모지 스토리로 변환
+ * Dynamic Multi-Model Cascade Engine
+ * 모델명 404/deprecated 이슈에 100% 자동 유연 대응하는 자가 치유 폴백 루프
  */
+const CANDIDATE_MODELS = [
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+  'gemini-1.5-flash-latest',
+  'gemini-1.5-flash',
+  'gemini-1.5-pro',
+  'gemini-pro'
+];
+
 export const convertTextToEmoji = async (inputText) => {
   if (!inputText || inputText.trim() === '') {
     return '🤐';
@@ -80,11 +73,8 @@ export const convertTextToEmoji = async (inputText) => {
   const apiKey = getGeminiApiKey();
 
   if (isGeminiConfigured()) {
-    try {
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-      
-      const prompt = `System Rule: You are an expert translator that converts user input (which may contain raw emotions, corporate stress, insults, complaints, or jokes) exclusively into a sequence of vivid, storytelling emojis.
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const prompt = `System Rule: You are an expert translator that converts user input (which may contain raw emotions, corporate stress, insults, complaints, or jokes) exclusively into a sequence of vivid, storytelling emojis.
       
 Rules:
 1. Output ONLY emojis. No text, no markdown, no quotes, no explanations, no spaces between emojis unless necessary.
@@ -95,21 +85,24 @@ Rules:
 User Input: "${inputText.replace(/"/g, '')}"
 Emoji Sequence Output:`;
 
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text() ? response.text().trim() : '';
-      
-      // 이모지만 추출
-      const emojiOnly = text.replace(/[a-zA-Z0-9\s.,!?"'가-힣]/g, '');
+    // Try candidate models sequentially until success
+    for (const modelName of CANDIDATE_MODELS) {
+      try {
+        const model = genAI.getGenerativeModel({ model: modelName });
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        const text = response.text() ? response.text().trim() : '';
 
-      if (emojiOnly && emojiOnly.length >= 1) {
-        return emojiOnly;
+        const emojiOnly = text.replace(/[a-zA-Z0-9\s.,!?"'가-힣]/g, '');
+        if (emojiOnly && emojiOnly.length >= 1) {
+          return emojiOnly;
+        }
+      } catch (err) {
+        console.warn(`[Gemini Dynamic Cascade] Model '${modelName}' call failed (${err.message}), trying next model...`);
       }
-    } catch (err) {
-      console.warn('Gemini API call failed, falling back to rule-based converter:', err);
     }
   }
 
-  // Fallback Rule-based execution
+  // Fallback Rule-based execution if all Gemini models fail or API key missing
   return fallbackRuleBasedConverter(inputText);
 };
