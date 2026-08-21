@@ -39,8 +39,8 @@ export default function MessageCard({ message, isAdmin, onDelete }) {
   };
 
   const handleAddComment = async (e) => {
-    e.preventDefault();
-    if (!commentText.trim()) return;
+    if (e) e.preventDefault();
+    if (!commentText.trim() || isSubmittingComment) return;
 
     setIsSubmittingComment(true);
     try {
@@ -61,6 +61,13 @@ export default function MessageCard({ message, isAdmin, onDelete }) {
     }
   };
 
+  const handleCommentKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleAddComment();
+    }
+  };
+
   const handleDeleteComment = async (commentId) => {
     if (!window.confirm('댓글을 삭제하시겠습니까?')) return;
     const res = await deleteComment(commentId);
@@ -72,7 +79,6 @@ export default function MessageCard({ message, isAdmin, onDelete }) {
   const emojiArray = Array.from(message.emoji_content || '');
 
   return (
-    // Restored outer feed card container
     <div className="corporate-card p-3.5 hover:shadow-sm transition">
       {/* Header: FROM -> TO */}
       <div className="flex items-center justify-between text-xs mb-2 pb-1.5 border-b border-slate-100 dark:border-slate-800">
@@ -104,7 +110,7 @@ export default function MessageCard({ message, isAdmin, onDelete }) {
         </div>
       </div>
 
-      {/* Main Emoji Display: ONLY inner background & inner border removed as requested */}
+      {/* Main Emoji Display */}
       <div className="my-2.5 px-1 py-1">
         <div className="flex flex-wrap items-center gap-1.5 text-2xl tracking-wide select-all">
           {emojiArray.map((emo, idx) => (
@@ -180,7 +186,7 @@ export default function MessageCard({ message, isAdmin, onDelete }) {
           </div>
         )}
 
-        {/* Add Comment Form */}
+        {/* Add Comment Form: Text '[댓글]' Removed & Replaced by Icon Only */}
         <form onSubmit={handleAddComment} className="flex items-center gap-1.5">
           <input
             type="text"
@@ -191,18 +197,19 @@ export default function MessageCard({ message, isAdmin, onDelete }) {
           />
           <input
             type="text"
-            placeholder="댓글 수군수군..."
+            placeholder="댓글 수군수군... (Enter 전송)"
             value={commentText}
             onChange={(e) => setCommentText(e.target.value)}
+            onKeyDown={handleCommentKeyDown}
             className="flex-1 px-2.5 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none"
           />
           <button
             type="submit"
             disabled={isSubmittingComment || !commentText.trim()}
-            className="px-2.5 py-1 text-xs font-semibold rounded bg-emerald-700 hover:bg-emerald-800 text-white disabled:opacity-50 transition flex items-center gap-1 whitespace-nowrap"
+            className="p-1.5 rounded-md bg-emerald-700 hover:bg-emerald-800 text-white disabled:opacity-50 transition flex items-center justify-center shrink-0"
+            title="댓글 등록"
           >
-            <Send className="w-2.5 h-2.5" />
-            <span>[댓글]</span>
+            <Send className="w-3.5 h-3.5" />
           </button>
         </form>
       </div>

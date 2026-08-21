@@ -11,10 +11,10 @@ export default function MessageForm({ onMessageAdded }) {
   const [formError, setFormError] = useState('');
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     setFormError('');
 
-    if (!rawContent.trim()) return;
+    if (!rawContent.trim() || isSubmitting) return;
 
     setIsSubmitting(true);
 
@@ -44,6 +44,14 @@ export default function MessageForm({ onMessageAdded }) {
     }
   };
 
+  // Enter to submit (Shift+Enter for newline)
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
+    }
+  };
+
   return (
     <div className="corporate-card p-4 mb-5 relative">
       <form onSubmit={handleSubmit} className="space-y-3">
@@ -65,7 +73,7 @@ export default function MessageForm({ onMessageAdded }) {
               type="text"
               value={fromName}
               onChange={(e) => setFromName(e.target.value)}
-              placeholder="FROM"
+              placeholder="FROM (기본: 익명)"
               maxLength={20}
               className="w-full pl-8 pr-3 py-1.5 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500"
             />
@@ -80,7 +88,7 @@ export default function MessageForm({ onMessageAdded }) {
               type="text"
               value={toName}
               onChange={(e) => setToName(e.target.value)}
-              placeholder="TO"
+              placeholder="TO (대상)"
               maxLength={25}
               className="w-full pl-8 pr-3 py-1.5 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500"
             />
@@ -95,7 +103,8 @@ export default function MessageForm({ onMessageAdded }) {
             <textarea
               value={rawContent}
               onChange={(e) => setRawContent(e.target.value)}
-              placeholder="💬 털어놓을 욕/속마음을 써보세요..."
+              onKeyDown={handleKeyDown}
+              placeholder="💬 털어놓을 욕/속마음을 써보세요... (Enter 키로 바로 전송)"
               rows={3}
               maxLength={200}
               className="w-full p-3 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/80 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition resize-none shadow-inner"
@@ -106,7 +115,7 @@ export default function MessageForm({ onMessageAdded }) {
         {/* Submit Button */}
         <div className="flex items-center justify-between pt-0.5">
           <span className="text-[10px] text-slate-400">
-            🔒 이모지로 변환 저장
+            🔒 이모지로 변환 저장 (Enter 전송)
           </span>
 
           <button
