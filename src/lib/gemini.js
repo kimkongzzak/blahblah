@@ -43,7 +43,7 @@ const extractPureEmojisOnly = (text) => {
  */
 const emergencyFallbackConverter = (text, reason = '네트워크 통신 지연') => {
   if (reason.includes('429') || reason.includes('Quota exceeded') || reason.includes('rate-limits')) {
-    console.warn(`⏳ [Google API 429 쿼터 일시 초과] 무료 티어 제한(분당 20회)을 초과했습니다. 약 30초 후 구글 리셋 시 자동 복구됩니다.`);
+    console.warn(`⏳ [Google API 일일 쿼터 소진] 해당 키의 오늘 자 무료 쿼터가 소진되었습니다. aistudio.google.com에서 새 키를 생성해 바꾸시거나 대체 이모지가 출력됩니다.`);
   } else {
     console.log(`📢 [대체 이모지 모드] AI 응답 대기/지연으로 룰 이모지를 생성했습니다. (사유: ${reason})`);
   }
@@ -73,6 +73,15 @@ const emergencyFallbackConverter = (text, reason = '네트워크 통신 지연')
 };
 
 /**
+ * 429 쿼터 초과 시 쿼터 계정이 분리된 차순위 모델들 (Quota Failover Models)
+ */
+const MODEL_FAILOVER_LIST = [
+  'gemini-3.5-flash',
+  'gemini-2.0-flash',
+  'gemini-1.5-flash'
+];
+
+/**
  * 🚀 무슨 텍스트가 들어오든 100% 우선적으로 Gemini AI API를 직접 호출하여 4~8개 이모지로 변환
  */
 export const convertTextToEmoji = async (inputText) => {
@@ -86,7 +95,6 @@ export const convertTextToEmoji = async (inputText) => {
     return emergencyFallbackConverter(inputText, 'Gemini API Key 미설정');
   }
 
-  // Vivid Storytelling Few-Shot Prompt for Gemini AI
   const promptText = `You are a creative translator. Convert user input into a vivid storytelling sequence of 4 to 8 emojis.
 
 EXAMPLES:
@@ -106,79 +114,75 @@ Emoji Sequence:`;
   let lastErrorMessage = '';
   const encodedInput = encodeSafeBase64(inputText);
 
-  // [1순위] Google 공식 @google/genai SDK로 gemini-3.5-flash AI 직접 호출
-  try {
-    const ai = new GoogleGenAI({ apiKey });
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.5-flash',
-      contents: promptText,
-      config: {
-        temperature: 0.9,
-        maxOutputTokens: 300,
-      }
-    });
-
-    const responseText = response?.text ? response.text.trim() : '';
-    const finishReason = response?.candidates?.[0]?.finishReason || 'STOP';
-    const pureEmojis = extractPureEmojisOnly(responseText);
-
-    if (pureEmojis && pureEmojis.length >= 1) {
-      console.log(`✅ [Gemini AI 변환 성공] 입력: "${inputText}" ➡️ 이모지: ${pureEmojis}`);
-
-      logAiExecution({
-        inputText: encodedInput,
-        isSuccess: true,
-        usedModel: 'gemini-3.5-flash-sdk',
-        outputEmoji: pureEmojis,
-        errorMessage: null
-      });
-
-      return pureEmojis;
-    } else {
-      lastErrorMessage = `Gemini SDK 응답 빈값 (finishReason: ${finishReason})`;
-    }
-  } catch (sdkErr) {
-    lastErrorMessage = sdkErr?.message || String(sdkErr);
-
-    // REST 직통 2차 시도
+  // 1. Try SDK & REST across failover models if 429 quota is hit
+  for (const modelName of MODEL_FAILOVER_LIST) {
     try {
-      const restUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
-      const res = await fetch(restUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: promptText }] }],
-          generationConfig: { temperature: 0.9, maxOutputTokens: 300 }
-        })
+      const ai = new GoogleGenAI({ apiKey });
+      const response = await ai.models.generateContent({
+        model: modelName,
+        contents: promptText,
+        config: {
+          temperature: 0.9,
+          maxOutputTokens: 300,
+        }
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        const responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        const finishReason = data?.candidates?.[0]?.finishReason || 'STOP';
-        const pureEmojis = extractPureEmojisOnly(responseText);
+      const responseText = response?.text ? response.text.trim() : '';
+      const pureEmojis = extractPureEmojisOnly(responseText);
 
-        if (pureEmojis && pureEmojis.length >= 1) {
-          console.log(`✅ [Gemini AI 변환 성공] 입력: "${inputText}" ➡️ 이모지: ${pureEmojis}`);
+      if (pureEmojis && pureEmojis.length >= 1) {
+        console.log(`✅ [Gemini AI 변환 성공] 모델: ${modelName} ➡️ 이모지: ${pureEmojis}`);
 
-          logAiExecution({
-            inputText: encodedInput,
-            isSuccess: true,
-            usedModel: 'gemini-3.5-flash-rest',
-            outputEmoji: pureEmojis,
-            errorMessage: null
-          });
+        logAiExecution({
+          inputText: encodedInput,
+          isSuccess: true,
+          usedModel: `${modelName}-sdk`,
+          outputEmoji: pureEmojis,
+          errorMessage: null
+        });
 
-          return pureEmojis;
-        } else {
-          lastErrorMessage = `Gemini REST 응답 빈값 (finishReason: ${finishReason})`;
-        }
-      } else {
-        const errData = await res.json().catch(() => ({}));
-        lastErrorMessage = errData?.error?.message || `Status ${res.status}`;
+        return pureEmojis;
       }
-    } catch (restErr) {
-      lastErrorMessage = restErr?.message || String(restErr);
+    } catch (sdkErr) {
+      lastErrorMessage = sdkErr?.message || String(sdkErr);
+
+      // Try REST for this model
+      try {
+        const restUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+        const res = await fetch(restUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: promptText }] }],
+            generationConfig: { temperature: 0.9, maxOutputTokens: 300 }
+          })
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          const pureEmojis = extractPureEmojisOnly(responseText);
+
+          if (pureEmojis && pureEmojis.length >= 1) {
+            console.log(`✅ [Gemini AI 변환 성공] 모델: ${modelName} (REST) ➡️ 이모지: ${pureEmojis}`);
+
+            logAiExecution({
+              inputText: encodedInput,
+              isSuccess: true,
+              usedModel: `${modelName}-rest`,
+              outputEmoji: pureEmojis,
+              errorMessage: null
+            });
+
+            return pureEmojis;
+          }
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          lastErrorMessage = errData?.error?.message || `Status ${res.status}`;
+        }
+      } catch (restErr) {
+        lastErrorMessage = restErr?.message || String(restErr);
+      }
     }
   }
 
