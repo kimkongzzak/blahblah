@@ -14,11 +14,6 @@ export const supabase = isSupabaseConfigured()
 const LOCAL_STORAGE_KEY = 'emoji_timeline_messages_v2';
 const LOCAL_COMMENTS_KEY = 'emoji_timeline_comments_v2';
 
-// Clear old mock/sample data key if exists
-try {
-  localStorage.removeItem('emoji_timeline_messages_v1');
-} catch (e) {}
-
 const getLocalMessages = () => {
   try {
     const data = localStorage.getItem(LOCAL_STORAGE_KEY);
@@ -45,13 +40,14 @@ const saveLocalComments = (comments) => {
   localStorage.setItem(LOCAL_COMMENTS_KEY, JSON.stringify(comments));
 };
 
-// Fetch messages with explicit exception catching
+// Safe Fetch without relying on Supabase implicit FK relationships (Prevents PGRST200 error)
 export const fetchMessages = async ({ page = 0, limit = 10, searchTo = '' }) => {
   if (isSupabaseConfigured()) {
     try {
+      // 1. Fetch messages
       let query = supabase
         .from('messages')
-        .select('*, comments(*)', { count: 'exact' })
+        .select('*', { count: 'exact' })
         .order('created_at', { ascending: false })
         .range(page * limit, (page + 1) * limit - 1);
 
@@ -59,15 +55,41 @@ export const fetchMessages = async ({ page = 0, limit = 10, searchTo = '' }) => 
         query = query.ilike('to_name', `%${searchTo.trim()}%`);
       }
 
-      const { data, error, count } = await query;
+      const { data: msgData, error: msgError, count } = await query;
       
-      if (error) {
-        return { data: [], hasMore: false, totalCount: 0, error: `[DB 조회 실패] ${error.message} (${error.code || 'ERR'})` };
+      if (msgError) {
+        return { data: [], hasMore: false, totalCount: 0, error: `[DB 조회 실패] ${msgError.message} (${msgError.code || 'ERR'})` };
       }
 
-      const formatted = (data || []).map(item => ({
+      if (!msgData || msgData.length === 0) {
+        return { data: [], hasMore: false, totalCount: 0, error: null };
+      }
+
+      // 2. Fetch associated comments safely by message IDs
+      const msgIds = msgData.map(m => m.id);
+      let commentsMap = {};
+
+      try {
+        const { data: commentData } = await supabase
+          .from('comments')
+          .select('*')
+          .in('message_id', msgIds)
+          .order('created_at', { ascending: true });
+
+        if (commentData) {
+          commentData.forEach(c => {
+            if (!commentsMap[c.message_id]) commentsMap[c.message_id] = [];
+            commentsMap[c.message_id].push(c);
+          });
+        }
+      } catch (cErr) {
+        console.warn('Comments fetch warning:', cErr);
+      }
+
+      // 3. Map comments to messages
+      const formatted = msgData.map(item => ({
         ...item,
-        comments: (item.comments || []).sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+        comments: commentsMap[item.id] || []
       }));
 
       return { data: formatted, hasMore: (page + 1) * limit < (count || 0), totalCount: count || 0, error: null };
@@ -95,7 +117,6 @@ export const fetchMessages = async ({ page = 0, limit = 10, searchTo = '' }) => 
   return { data: pageData, hasMore, totalCount: list.length, error: null };
 };
 
-// Create Message with explicit error reporting
 export const createMessage = async ({ fromName, toName, emojiContent }) => {
   const newMessage = {
     from_name: fromName || '익명',
@@ -112,7 +133,7 @@ export const createMessage = async ({ fromName, toName, emojiContent }) => {
         .select();
 
       if (error) {
-        return { success: false, error: `[DB 저장 실패] ${error.message} (테이블/RLS 확인 필요)` };
+        return { success: false, error: `[DB 저장 실패] ${error.message}` };
       }
       return { success: true, message: { ...data[0], comments: [] } };
     } catch (err) {
@@ -162,6 +183,9 @@ export const incrementLike = async (id, currentLikes = 0) => {
 export const deleteMessage = async (id) => {
   if (isSupabaseConfigured() && !String(id).startsWith('local-')) {
     try {
+      // Delete comments first for clean handling
+      await supabase.from('comments').delete().eq('message_id', id);
+
       const { error } = await supabase
         .from('messages')
         .delete()
