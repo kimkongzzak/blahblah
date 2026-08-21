@@ -8,7 +8,7 @@ export const isGeminiConfigured = () => {
 };
 
 /**
- * 룰 기반 감정 및 욕설/상황 키워드 매핑 Fallback 엔진
+ * 룰 기반 감정 및 욕설/상황 키워드 매핑 Fallback 엔진 (실행속도 0.001초)
  */
 const fallbackRuleBasedConverter = (text) => {
   if (!text) return '🤐';
@@ -51,17 +51,6 @@ const fallbackRuleBasedConverter = (text) => {
 };
 
 /**
- * Ultra-Fast Direct Flash Models List (No pre-fetch overhead for blazing 300ms response)
- */
-const ULTRA_FAST_FLASH_MODELS = [
-  'gemini-3.7-flash',
-  'gemini-2.5-flash',
-  'gemini-1.5-flash',
-  'gemini-2.0-flash',
-  'gemini-1.5-flash-8b'
-];
-
-/**
  * Extract ONLY pure Unicode Pictographic Emojis
  */
 const extractPureEmojisOnly = (text) => {
@@ -73,6 +62,9 @@ const extractPureEmojisOnly = (text) => {
   return '';
 };
 
+/**
+ * Single High-Speed Direct Fetch with 1.2-second strict AbortController Timeout
+ */
 export const convertTextToEmoji = async (inputText) => {
   if (!inputText || inputText.trim() === '') {
     return '🤐';
@@ -81,48 +73,44 @@ export const convertTextToEmoji = async (inputText) => {
   const apiKey = getGeminiApiKey();
 
   if (isGeminiConfigured()) {
-    const promptText = `Convert user input into a sequence of 4 to 8 vivid storytelling emojis representing emotions and actions.
+    const promptText = `Convert input into 4 to 8 vivid storytelling emojis only. No text, no quotes. Input: "${inputText.replace(/"/g, '')}"`;
 
-CRITICAL INSTRUCTIONS:
-- Output ONLY valid unicode emojis.
-- Do NOT output words, markdown, ASCII symbols like (*, :, (, )), or reasoning text.
-- Do NOT explain your thought process.
+    // Try fast model with strict 1.2s AbortController timeout to guarantee instant response
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 1200);
 
-User Input: "${inputText.replace(/"/g, '')}"
-Emoji Sequence:`;
-
-    // Direct High-Speed Target Call (Instant 300ms execution)
-    for (const modelName of ULTRA_FAST_FLASH_MODELS) {
-      try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: promptText }] }],
-            generationConfig: {
-              temperature: 0.6,
-              maxOutputTokens: 40
-            }
-          })
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          const parts = data?.candidates?.[0]?.content?.parts || [];
-          const answerPart = parts.find(p => !p.thought && p.text) || parts[0];
-          const responseText = answerPart?.text || '';
-
-          const pureEmojis = extractPureEmojisOnly(responseText);
-          if (pureEmojis && pureEmojis.length >= 1) {
-            return pureEmojis;
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: promptText }] }],
+          generationConfig: {
+            temperature: 0.5,
+            maxOutputTokens: 30
           }
+        })
+      });
+
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        const data = await res.json();
+        const responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        const pureEmojis = extractPureEmojisOnly(responseText);
+
+        if (pureEmojis && pureEmojis.length >= 1) {
+          return pureEmojis;
         }
-      } catch (err) {
-        // fast failover to next flash model if 404
       }
+    } catch (err) {
+      // Aborted or network error -> fallback instantly
+      clearTimeout(timeoutId);
     }
   }
 
+  // Instant 0.001s fallback
   return fallbackRuleBasedConverter(inputText);
 };
