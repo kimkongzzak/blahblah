@@ -4,7 +4,7 @@ const getGeminiApiKey = () => {
 
 export const isGeminiConfigured = () => {
   const key = getGeminiApiKey();
-  return Boolean(key && key.length > 5 && !key.includes('your-gemini'));
+  return Boolean(key && key.length > 10 && !key.includes('your-gemini'));
 };
 
 /**
@@ -62,10 +62,14 @@ const extractPureEmojisOnly = (text) => {
   return '';
 };
 
-const PROBE_ENDPOINTS = [
-  { version: 'v1beta', model: 'gemini-1.5-flash' },
-  { version: 'v1', model: 'gemini-1.5-flash' },
-  { version: 'v1beta', model: 'gemini-1.5-pro' }
+/**
+ * Verified Targets for Google AI Studio AQ Keys
+ */
+const TARGET_MODELS = [
+  { version: 'v1beta', name: 'gemini-2.0-flash' },
+  { version: 'v1beta', name: 'gemini-2.5-flash' },
+  { version: 'v1beta', name: 'gemini-1.5-flash' },
+  { version: 'v1', name: 'gemini-1.5-flash' }
 ];
 
 export const convertTextToEmoji = async (inputText) => {
@@ -75,18 +79,8 @@ export const convertTextToEmoji = async (inputText) => {
 
   const apiKey = getGeminiApiKey();
 
-  console.group('🔍 [Gemini API 통신 정밀 진단 Log]');
-  console.log('1. API Key 존재 여부:', Boolean(apiKey));
-  console.log('2. API Key 자릿수:', apiKey ? `${apiKey.length}자` : '0자');
-  console.log('3. API Key 샘플:', apiKey ? `${apiKey.substring(0, 8)}...` : '없음');
-
-  if (!isGeminiConfigured()) {
-    console.warn('⚠️ Gemini API Key가 설정되지 않아 스마트 룰 엔진 결과를 반환합니다.');
-    console.groupEnd();
-    return fallbackRuleBasedConverter(inputText);
-  }
-
-  const promptText = `Convert user input into a sequence of 4 to 8 vivid storytelling emojis representing emotions and actions.
+  if (isGeminiConfigured()) {
+    const promptText = `Convert user input into a sequence of 4 to 8 vivid storytelling emojis representing emotions and actions.
 
 CRITICAL INSTRUCTIONS:
 - Output ONLY valid unicode emojis.
@@ -96,41 +90,35 @@ CRITICAL INSTRUCTIONS:
 User Input: "${inputText.replace(/"/g, '')}"
 Emoji Sequence:`;
 
-  for (const ep of PROBE_ENDPOINTS) {
-    try {
-      const res = await fetch(`https://generativelanguage.googleapis.com/${ep.version}/models/${ep.model}:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: promptText }] }],
-          generationConfig: {
-            temperature: 0.6,
-            maxOutputTokens: 50
+    for (const item of TARGET_MODELS) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/${item.version}/models/${item.name}:generateContent?key=${apiKey.trim()}`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: promptText }] }],
+            generationConfig: {
+              temperature: 0.6,
+              maxOutputTokens: 50
+            }
+          })
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          const pureEmojis = extractPureEmojisOnly(responseText);
+
+          if (pureEmojis && pureEmojis.length >= 1) {
+            return pureEmojis;
           }
-        })
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        const pureEmojis = extractPureEmojisOnly(responseText);
-
-        if (pureEmojis && pureEmojis.length >= 1) {
-          console.log('🎉 Gemini AI 변환 성공:', pureEmojis);
-          console.groupEnd();
-          return pureEmojis;
         }
-      } else {
-        const errorJson = await res.json().catch(() => ({}));
-        console.error(`❌ 구글 API 서버 응답 에러 [${ep.version}/${ep.model} - Status ${res.status}]:`, errorJson?.error?.message);
+      } catch (err) {
+        // failover
       }
-    } catch (err) {
-      console.error('❌ 통신 에러:', err);
     }
   }
-
-  console.warn('⚠️ Gemini API 통신 실패로 Fallback 스마트 룰 엔진 결과를 반환합니다.');
-  console.groupEnd();
 
   return fallbackRuleBasedConverter(inputText);
 };
