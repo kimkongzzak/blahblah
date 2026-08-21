@@ -2,13 +2,14 @@
 -- 🎋 임금님 귀는 당나귀 귀 (King's Donkey Ears) DB Schema
 -- ================================================
 
--- 1. Messages Table (대나무숲 대통과 이모지 속마음 메시지)
+-- 1. Messages Table (대나무숲 대통과 이모지 속마음 메시지 + 원본 인코딩 텍스트)
 CREATE TABLE IF NOT EXISTS public.messages (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
   from_name VARCHAR(50) DEFAULT '익명' NOT NULL,
   to_name VARCHAR(50) DEFAULT '누군가' NOT NULL,
   emoji_content TEXT NOT NULL,
+  raw_text_encoded TEXT,
   likes_count INT DEFAULT 0 NOT NULL
 );
 

@@ -145,11 +145,12 @@ export const fetchMessages = async ({ page = 0, limit = 10, searchTo = '' }) => 
   return { data: pageData, hasMore, totalCount: list.length, error: null };
 };
 
-export const createMessage = async ({ fromName, toName, emojiContent }) => {
+export const createMessage = async ({ fromName, toName, emojiContent, rawTextEncoded }) => {
   const newMessage = {
     from_name: fromName || '익명',
     to_name: toName || '누군가',
     emoji_content: emojiContent,
+    raw_text_encoded: rawTextEncoded || '',
     likes_count: 0
   };
 

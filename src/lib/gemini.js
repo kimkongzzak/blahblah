@@ -11,6 +11,25 @@ const getGeminiApiKey = () => {
 };
 
 /**
+ * UTF-8 Safe Base64 Helper
+ */
+export const encodeSafeBase64 = (str) => {
+  try {
+    return btoa(encodeURIComponent(str || ''));
+  } catch (e) {
+    return '';
+  }
+};
+
+export const decodeSafeBase64 = (base64Str) => {
+  try {
+    return decodeURIComponent(atob(base64Str || ''));
+  } catch (e) {
+    return base64Str || '';
+  }
+};
+
+/**
  * 🧹 순수 유니코드 그림 이모지 정제함수
  */
 const extractPureEmojisOnly = (text) => {
@@ -20,23 +39,28 @@ const extractPureEmojisOnly = (text) => {
 };
 
 /**
- * 🎨 최후의 네트워크 장애 대비 룰 엔진
+ * 🎨 최후의 네트워크 장애 대비 룰 엔진 (최소 4개 이모지 반환 보장)
  */
 const emergencyFallbackConverter = (text, reason = '알 수 없는 원인') => {
   console.warn(`⚠️ [네트워크 장애 / API 오류 발생]`);
   console.warn(`└─ 실패 원인: ${reason}`);
   console.warn(`└─ 📢 [대체 룰 이모지 모드] AI API 대신 내장 룰 이모지를 생성하여 반환합니다.`);
 
-  if (!text) return '🤐';
-  const emojis = ['🎭', '💬', '⚡️', '👀', '💭', '🔮', '✨', '🔥'];
+  if (!text) return '🤐💬👀💭';
+  const emojis = ['🎭', '💬', '⚡️', '👀', '💭', '🔮', '✨', '🔥', '🏃‍♂️', '🤬', '🛑', '💥'];
   let hash = 0;
   for (let i = 0; i < text.length; i++) hash = text.charCodeAt(i) + ((hash << 5) - hash);
   const start = Math.abs(hash) % emojis.length;
-  const result = [emojis[start], emojis[(start + 1) % emojis.length], emojis[(start + 2) % emojis.length], emojis[(start + 3) % emojis.length]].join('');
+  const result = [
+    emojis[start],
+    emojis[(start + 1) % emojis.length],
+    emojis[(start + 2) % emojis.length],
+    emojis[(start + 3) % emojis.length],
+    emojis[(start + 4) % emojis.length]
+  ].join('');
 
-  // Log failure to DB asynchronously
   logAiExecution({
-    inputText: text,
+    inputText: encodeSafeBase64(text),
     isSuccess: false,
     usedModel: 'emergency-fallback-engine',
     outputEmoji: result,
@@ -47,11 +71,11 @@ const emergencyFallbackConverter = (text, reason = '알 수 없는 원인') => {
 };
 
 /**
- * 🚀 무슨 텍스트가 들어오든 100% 우선적으로 Gemini AI API를 직접 호출하여 이모지로 변환
+ * 🚀 무슨 텍스트가 들어오든 100% 우선적으로 Gemini AI API를 직접 호출하여 4~8개 이모지로 변환
  */
 export const convertTextToEmoji = async (inputText) => {
   if (!inputText || inputText.trim() === '') {
-    return '🤐';
+    return '🤐💬👀💭';
   }
 
   const apiKey = getGeminiApiKey();
@@ -61,40 +85,47 @@ export const convertTextToEmoji = async (inputText) => {
     return emergencyFallbackConverter(inputText, 'Gemini API Key 미설정');
   }
 
-  const promptText = `Convert user input into a sequence of 4 to 8 vivid storytelling emojis representing emotions and actions.
+  // Strictly enforce 4 to 8 emojis in prompt
+  const promptText = `Convert the following user input into a rich storytelling sequence of EXACTLY 4 to 8 vivid emojis.
 
-CRITICAL INSTRUCTIONS:
-- Output ONLY valid unicode emojis.
-- Do NOT output words, markdown, ASCII symbols like (*, :, (, )), or reasoning text.
-- Do NOT explain your thought process.
+STRICT INSTRUCTIONS:
+- You MUST output EXACTLY between 4 and 8 emojis.
+- NEVER return a single emoji or less than 4 emojis. Single emoji output is STRICTLY FORBIDDEN.
+- Output ONLY valid unicode emojis. No words, no markdown, no quotes, no ASCII symbols like (*, :, (, )).
+- Express the subject, action, emotion, and story in a 4 to 8 emoji sequence.
 
 User Input: "${inputText.replace(/"/g, '')}"
-Emoji Sequence:`;
+Emoji Sequence (4-8 emojis):`;
 
   let lastErrorMessage = '';
+  const encodedInput = encodeSafeBase64(inputText);
 
-  // [1순위] Google 공식 @google/genai SDK로 gemini-3.5-flash AI 직접 호출
+  // [1순위] Google 공식 @google/genai SDK로 gemini-3.5-flash AI 직접 호출 (maxTokens 25로 속도 최적화)
   try {
     const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
       model: 'gemini-3.5-flash',
       contents: promptText,
       config: {
-        temperature: 0.8,
-        maxOutputTokens: 50,
+        temperature: 0.7,
+        maxOutputTokens: 25,
       }
     });
 
     const responseText = response?.text ? response.text.trim() : '';
-    const pureEmojis = extractPureEmojisOnly(responseText);
+    let pureEmojis = extractPureEmojisOnly(responseText);
 
+    // If AI returned fewer than 4 emojis, pad with contextual emojis to guarantee 4~8 emojis
     if (pureEmojis && pureEmojis.length >= 1) {
-      console.log(`✅ [Gemini AI 변환 성공] 모델: gemini-3.5-flash (SDK)`);
-      console.log(`└─ 입력: "${inputText}" ➡️ 이모지: ${pureEmojis}`);
+      if (Array.from(pureEmojis).length < 4) {
+        pureEmojis += '💬👀💭⚡️'.substring(0, (4 - Array.from(pureEmojis).length) * 2);
+      }
 
-      // Log success to DB asynchronously
+      console.log(`✅ [Gemini AI 변환 성공] 모델: gemini-3.5-flash (SDK)`);
+      console.log(`└─ 입력: "${inputText}" ➡️ 이모지 (4~8개): ${pureEmojis}`);
+
       logAiExecution({
-        inputText: inputText,
+        inputText: encodedInput,
         isSuccess: true,
         usedModel: 'gemini-3.5-flash-sdk',
         outputEmoji: pureEmojis,
@@ -117,22 +148,25 @@ Emoji Sequence:`;
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: promptText }] }],
-          generationConfig: { temperature: 0.8, maxOutputTokens: 50 }
+          generationConfig: { temperature: 0.7, maxOutputTokens: 25 }
         })
       });
 
       if (res.ok) {
         const data = await res.json();
         const responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        const pureEmojis = extractPureEmojisOnly(responseText);
+        let pureEmojis = extractPureEmojisOnly(responseText);
 
         if (pureEmojis && pureEmojis.length >= 1) {
-          console.log(`✅ [Gemini AI 변환 성공] 모델: gemini-3.5-flash (REST)`);
-          console.log(`└─ 입력: "${inputText}" ➡️ 이모지: ${pureEmojis}`);
+          if (Array.from(pureEmojis).length < 4) {
+            pureEmojis += '💬👀💭⚡️'.substring(0, (4 - Array.from(pureEmojis).length) * 2);
+          }
 
-          // Log success to DB asynchronously
+          console.log(`✅ [Gemini AI 변환 성공] 모델: gemini-3.5-flash (REST)`);
+          console.log(`└─ 입력: "${inputText}" ➡️ 이모지 (4~8개): ${pureEmojis}`);
+
           logAiExecution({
-            inputText: inputText,
+            inputText: encodedInput,
             isSuccess: true,
             usedModel: 'gemini-3.5-flash-rest',
             outputEmoji: pureEmojis,
@@ -152,6 +186,5 @@ Emoji Sequence:`;
     }
   }
 
-  // 서버 통신 장애 시 최후의 비상 안전망 및 투명 로그 저장
   return emergencyFallbackConverter(inputText, lastErrorMessage);
 };

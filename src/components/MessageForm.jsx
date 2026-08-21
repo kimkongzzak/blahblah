@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Sparkles, AlertTriangle } from 'lucide-react';
-import { convertTextToEmoji } from '../lib/gemini';
+import { convertTextToEmoji, encodeSafeBase64 } from '../lib/gemini';
 import confetti from 'canvas-confetti';
 
 export default function MessageForm({ onMessageAdded }) {
@@ -20,11 +20,13 @@ export default function MessageForm({ onMessageAdded }) {
 
     try {
       const emojiResult = await convertTextToEmoji(rawContent);
+      const encodedText = encodeSafeBase64(rawContent.trim());
 
       const res = await onMessageAdded({
         fromName: fromName.trim() || '익명',
         toName: toName.trim() || '누군가',
-        emojiContent: emojiResult
+        emojiContent: emojiResult,
+        rawTextEncoded: encodedText
       });
 
       if (res && !res.success) {
