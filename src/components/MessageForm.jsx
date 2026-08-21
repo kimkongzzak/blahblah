@@ -121,7 +121,7 @@ export default function MessageForm({ onMessageAdded }) {
               </>
             ) : (
               <>
-                <span>🗑️ 털어넣기 (변환)</span>
+                <span>🗑️ 버리기</span>
               </>
             )}
           </button>
