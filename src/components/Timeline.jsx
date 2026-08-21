@@ -18,7 +18,6 @@ export default function Timeline({
   const observerTarget = useRef(null);
 
   useEffect(() => {
-    // Stop infinite scroll observer if there is a DB error or no more pages
     if (dbError || !hasMore || loadingMore || loading) return;
 
     const target = observerTarget.current;
@@ -39,13 +38,12 @@ export default function Timeline({
 
   return (
     <div className="space-y-3">
-      {/* DB Error Alert with Manual Retry */}
       {dbError && (
         <div className="p-3 rounded-lg bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-200 text-xs font-mono space-y-2">
           <div className="flex items-start space-x-2">
             <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
             <div className="flex-1">
-              <span className="font-bold block mb-0.5">DB 연동 오류 (자동 호출 중단됨):</span>
+              <span className="font-bold block mb-0.5">DB 연동 오류:</span>
               <span>{dbError}</span>
             </div>
           </div>
@@ -62,8 +60,11 @@ export default function Timeline({
       )}
 
       <div className="flex items-center justify-between gap-2 pb-1">
-        <div className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-          TIMELINE ({messages.length})
+        <div className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+          <span>🎋 대나무숲 피드</span>
+          <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-mono">
+            {messages.length}개
+          </span>
         </div>
 
         <div className="flex items-center space-x-2">
@@ -73,7 +74,7 @@ export default function Timeline({
               type="text"
               value={searchTo}
               onChange={(e) => setSearchTo(e.target.value)}
-              placeholder="TO 검색..."
+              placeholder="🗑️ 쓰레기통 검색..."
               className="w-full pl-7 pr-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
             />
           </div>
@@ -100,7 +101,7 @@ export default function Timeline({
         </div>
       ) : messages.length === 0 ? (
         <div className="corporate-card p-6 text-center text-xs text-slate-400">
-          {dbError ? 'DB 오류로 데이터를 불러올 수 없습니다.' : '등록된 피드가 없습니다.'}
+          {dbError ? 'DB 오류로 데이터를 불러올 수 없습니다.' : '대나무 숲에 등록된 속마음이 없습니다. 🫅🐴👂'}
         </div>
       ) : (
         <div className="space-y-2.5">
@@ -115,13 +116,12 @@ export default function Timeline({
         </div>
       )}
 
-      {/* Infinite Scroll Trigger - Only show when no error */}
       {!dbError && (
         <div ref={observerTarget} className="py-2 text-center">
           {loadingMore && (
             <div className="flex items-center justify-center space-x-1 text-xs text-slate-400">
-              <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
-              <span>로딩 중...</span>
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-500" />
+              <span>불러오는 중...</span>
             </div>
           )}
         </div>

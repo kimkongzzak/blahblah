@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ThumbsUp, Copy, Clock, ArrowRight, Trash2, MessageCircle, Send } from 'lucide-react';
+import { ThumbsUp, Copy, Clock, Trash2, MessageCircle, Send } from 'lucide-react';
 import { incrementLike, addComment, deleteComment } from '../lib/supabase';
 
 function formatTimeAgo(dateString) {
@@ -19,7 +19,6 @@ export default function MessageCard({ message, isAdmin, onDelete }) {
   const [hasLiked, setHasLiked] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // Comments state (Default Auto Expanded)
   const [commentsList, setCommentsList] = useState(message.comments || []);
   const [commentText, setCommentText] = useState('');
   const [authorName, setAuthorName] = useState('');
@@ -74,15 +73,14 @@ export default function MessageCard({ message, isAdmin, onDelete }) {
 
   return (
     <div className="corporate-card p-3.5 hover:shadow-sm transition">
-      {/* Card Header */}
+      {/* Header: Trash Target & From */}
       <div className="flex items-center justify-between text-xs mb-2 pb-1.5 border-b border-slate-100 dark:border-slate-800">
         <div className="flex items-center space-x-1.5 font-medium text-slate-700 dark:text-slate-300">
-          <span className="font-semibold text-slate-900 dark:text-slate-100">
-            {message.from_name || '익명'}
+          <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[11px] font-semibold border border-emerald-100 dark:border-emerald-900/40">
+            🗑️ @{message.to_name || '누군가'}
           </span>
-          <ArrowRight className="w-3 h-3 text-slate-400" />
-          <span className="text-blue-600 dark:text-blue-400 font-semibold">
-            @{message.to_name || '누군가'}
+          <span className="text-[11px] text-slate-400">
+            (by 🎭 {message.from_name || '익명'})
           </span>
         </div>
 
@@ -96,7 +94,7 @@ export default function MessageCard({ message, isAdmin, onDelete }) {
             <button
               onClick={() => onDelete(message.id)}
               className="p-1 rounded text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition"
-              title="메시지 삭제"
+              title="삭제"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
@@ -104,8 +102,8 @@ export default function MessageCard({ message, isAdmin, onDelete }) {
         </div>
       </div>
 
-      {/* Main Emoji Story */}
-      <div className="my-2 py-1.5 px-3 rounded bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
+      {/* Main Emoji Story in Speech Bubble Container */}
+      <div className="my-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/60 relative">
         <div className="flex flex-wrap items-center gap-1.5 text-2xl tracking-wide select-all">
           {emojiArray.map((emo, idx) => (
             <span key={idx}>{emo}</span>
@@ -114,13 +112,13 @@ export default function MessageCard({ message, isAdmin, onDelete }) {
       </div>
 
       {/* Actions */}
-      <div className="flex items-center justify-between text-xs pt-1 pb-2">
+      <div className="flex items-center justify-between text-xs pt-1 pb-1.5">
         <div className="flex items-center space-x-2">
           <button
             onClick={handleLike}
             className={`flex items-center space-x-1 px-2 py-0.5 rounded text-xs font-medium transition ${
               hasLiked
-                ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400'
+                ? 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400'
                 : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
           >
@@ -146,19 +144,18 @@ export default function MessageCard({ message, isAdmin, onDelete }) {
         </div>
       </div>
 
-      {/* Auto-Expanded Comments Section */}
-      <div className="mt-2 pt-2.5 border-t border-slate-100 dark:border-slate-800/80 space-y-2">
-        {/* Comment List */}
+      {/* Auto-Expanded Comments List */}
+      <div className="mt-1.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 space-y-2">
         {commentsList.length > 0 && (
-          <div className="space-y-1.5 mb-2.5">
+          <div className="space-y-1.5 mb-2">
             {commentsList.map((c) => (
               <div
                 key={c.id}
-                className="px-2.5 py-1.5 rounded bg-slate-50/80 dark:bg-slate-800/50 text-xs flex items-start justify-between group/c"
+                className="px-2.5 py-1.5 rounded-lg bg-slate-50/80 dark:bg-slate-800/50 text-xs flex items-start justify-between"
               >
                 <div>
                   <span className="font-semibold text-slate-800 dark:text-slate-200 mr-1.5 text-[11px]">
-                    {c.author_name || '익명'}:
+                    💬 {c.author_name || '익명'}:
                   </span>
                   <span className="text-slate-700 dark:text-slate-300 text-xs">
                     {c.comment_text}
@@ -192,7 +189,7 @@ export default function MessageCard({ message, isAdmin, onDelete }) {
           />
           <input
             type="text"
-            placeholder="댓글 작성..."
+            placeholder="댓글 수군수군..."
             value={commentText}
             onChange={(e) => setCommentText(e.target.value)}
             className="flex-1 px-2.5 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none"
@@ -200,7 +197,7 @@ export default function MessageCard({ message, isAdmin, onDelete }) {
           <button
             type="submit"
             disabled={isSubmittingComment || !commentText.trim()}
-            className="px-2.5 py-1 text-xs font-semibold rounded bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 text-white disabled:opacity-50 transition flex items-center gap-1 whitespace-nowrap"
+            className="px-2.5 py-1 text-xs font-semibold rounded bg-emerald-700 hover:bg-emerald-800 text-white disabled:opacity-50 transition flex items-center gap-1 whitespace-nowrap"
           >
             <Send className="w-2.5 h-2.5" />
             <span>[댓글]</span>
