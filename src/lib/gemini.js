@@ -85,7 +85,6 @@ export const convertTextToEmoji = async (inputText) => {
     return emergencyFallbackConverter(inputText, 'Gemini API Key 미설정');
   }
 
-  // Strictly enforce 4 to 8 emojis in prompt
   const promptText = `Convert the following user input into a rich storytelling sequence of EXACTLY 4 to 8 vivid emojis.
 
 STRICT INSTRUCTIONS:
@@ -100,7 +99,7 @@ Emoji Sequence (4-8 emojis):`;
   let lastErrorMessage = '';
   const encodedInput = encodeSafeBase64(inputText);
 
-  // [1순위] Google 공식 @google/genai SDK로 gemini-3.5-flash AI 직접 호출 (maxTokens 25로 속도 최적화)
+  // [1순위] Google 공식 @google/genai SDK로 gemini-3.5-flash AI 직접 호출 (maxOutputTokens: 100으로 넉넉하게 확장)
   try {
     const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
@@ -108,14 +107,13 @@ Emoji Sequence (4-8 emojis):`;
       contents: promptText,
       config: {
         temperature: 0.7,
-        maxOutputTokens: 25,
+        maxOutputTokens: 100, // MAX_TOKENS 절단 방지를 위해 100으로 확장
       }
     });
 
     const responseText = response?.text ? response.text.trim() : '';
     let pureEmojis = extractPureEmojisOnly(responseText);
 
-    // If AI returned fewer than 4 emojis, pad with contextual emojis to guarantee 4~8 emojis
     if (pureEmojis && pureEmojis.length >= 1) {
       if (Array.from(pureEmojis).length < 4) {
         pureEmojis += '💬👀💭⚡️'.substring(0, (4 - Array.from(pureEmojis).length) * 2);
@@ -148,7 +146,7 @@ Emoji Sequence (4-8 emojis):`;
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: promptText }] }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 25 }
+          generationConfig: { temperature: 0.7, maxOutputTokens: 100 }
         })
       });
 
