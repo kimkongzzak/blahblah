@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ThumbsUp, Clock, Trash2, MessageCircle, Send, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { ThumbsUp, Clock, Trash2, MessageCircle, Send, ArrowRight, ShieldCheck } from 'lucide-react';
 import { incrementLike, addComment, deleteComment } from '../lib/supabase';
 import { decodeSafeBase64 } from '../lib/gemini';
 
@@ -19,7 +19,6 @@ export default function MessageCard({ message, isAdmin, onDelete }) {
   const [likes, setLikes] = useState(message.likes_count || 0);
   const [hasLiked, setHasLiked] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [showDecoded, setShowDecoded] = useState(false);
 
   const [commentsList, setCommentsList] = useState(message.comments || []);
   const [commentText, setCommentText] = useState('');
@@ -101,18 +100,6 @@ export default function MessageCard({ message, isAdmin, onDelete }) {
             <span>{formatTimeAgo(message.created_at)}</span>
           </div>
 
-          {/* Admin Decode Toggle Button */}
-          {isAdmin && decodedRawText && (
-            <button
-              onClick={() => setShowDecoded(!showDecoded)}
-              className="px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-900 text-amber-700 dark:text-amber-300 text-[10px] flex items-center gap-1 font-semibold hover:bg-amber-100 transition"
-              title="관리자 전용 원문 디코딩"
-            >
-              {showDecoded ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-              <span>{showDecoded ? '원문 숨기기' : '원문 디코딩'}</span>
-            </button>
-          )}
-
           {isAdmin && (
             <button
               onClick={() => onDelete(message.id)}
@@ -125,13 +112,14 @@ export default function MessageCard({ message, isAdmin, onDelete }) {
         </div>
       </div>
 
-      {/* Admin Only Decoded Text View Box */}
-      {isAdmin && showDecoded && (
-        <div className="mb-2 p-2 rounded-lg bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-amber-900 dark:text-amber-200 text-xs font-mono break-all">
-          <span className="font-bold text-[10px] text-amber-600 dark:text-amber-400 block mb-0.5">
-            🔑 [관리자 보안 디코딩 원문]:
-          </span>
-          {decodedRawText}
+      {/* Admin Only Always-Visible Decoded Text View Box */}
+      {isAdmin && decodedRawText && (
+        <div className="mb-2 p-2 rounded-lg bg-amber-50/90 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-900 text-amber-900 dark:text-amber-200 text-xs font-mono break-all">
+          <div className="flex items-center gap-1 font-bold text-[10px] text-amber-700 dark:text-amber-300 mb-0.5">
+            <ShieldCheck className="w-3 h-3 text-amber-600" />
+            <span>[관리자 전용 원문 디코딩]:</span>
+          </div>
+          <span className="font-sans text-xs">{decodedRawText}</span>
         </div>
       )}
 
