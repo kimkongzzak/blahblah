@@ -21,7 +21,11 @@ const extractPureEmojisOnly = (text) => {
 /**
  * 🎨 최후의 네트워크 장애 대비 룰 엔진
  */
-const emergencyFallbackConverter = (text) => {
+const emergencyFallbackConverter = (text, reason = '알 수 없는 원인') => {
+  console.warn(`⚠️ [네트워크 장애 / API 오류 발생]`);
+  console.warn(`└─ 실패 원인: ${reason}`);
+  console.warn(`└─ 📢 [대체 룰 이모지 모드] AI API 대신 내장 룰 이모지를 생성하여 반환합니다.`);
+
   if (!text) return '🤐';
   const emojis = ['🎭', '💬', '⚡️', '👀', '💭', '🔮', '✨', '🔥'];
   let hash = 0;
@@ -40,6 +44,11 @@ export const convertTextToEmoji = async (inputText) => {
 
   const apiKey = getGeminiApiKey();
 
+  if (!apiKey) {
+    console.warn(`⚠️ [Gemini API Key 미설정] VITE_GEMINI_API_KEY 환경 변수가 없습니다.`);
+    return emergencyFallbackConverter(inputText, 'Gemini API Key 미설정');
+  }
+
   const promptText = `Convert user input into a sequence of 4 to 8 vivid storytelling emojis representing emotions and actions.
 
 CRITICAL INSTRUCTIONS:
@@ -50,7 +59,9 @@ CRITICAL INSTRUCTIONS:
 User Input: "${inputText.replace(/"/g, '')}"
 Emoji Sequence:`;
 
-  // [1순위 무조건 실행] Google 공식 @google/genai SDK로 gemini-3.5-flash AI 직접 호출
+  let lastErrorMessage = '';
+
+  // [1순위] Google 공식 @google/genai SDK로 gemini-3.5-flash AI 직접 호출
   try {
     const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
@@ -66,9 +77,16 @@ Emoji Sequence:`;
     const pureEmojis = extractPureEmojisOnly(responseText);
 
     if (pureEmojis && pureEmojis.length >= 1) {
+      console.log(`✅ [Gemini AI 변환 성공] 모델: gemini-3.5-flash (SDK)`);
+      console.log(`└─ 입력: "${inputText}" ➡️ 이모지: ${pureEmojis}`);
       return pureEmojis;
+    } else {
+      console.warn(`⚠️ [Gemini AI 응답 정제 실패] 응답 텍스트에 이모지가 없어 재시도합니다. 원문: "${responseText}"`);
     }
   } catch (sdkErr) {
+    lastErrorMessage = sdkErr?.message || String(sdkErr);
+    console.error(`❌ [Google GenAI SDK 호출 실패]:`, sdkErr);
+
     // REST 직통 2차 시도
     try {
       const restUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
@@ -87,12 +105,21 @@ Emoji Sequence:`;
         const pureEmojis = extractPureEmojisOnly(responseText);
 
         if (pureEmojis && pureEmojis.length >= 1) {
+          console.log(`✅ [Gemini AI 변환 성공] 모델: gemini-3.5-flash (REST)`);
+          console.log(`└─ 입력: "${inputText}" ➡️ 이모지: ${pureEmojis}`);
           return pureEmojis;
         }
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        lastErrorMessage = errData?.error?.message || `Status ${res.status}`;
+        console.error(`❌ [Gemini REST API 실패 - Status ${res.status}]:`, errData);
       }
-    } catch (restErr) {}
+    } catch (restErr) {
+      lastErrorMessage = restErr?.message || String(restErr);
+      console.error(`❌ [Gemini REST 통신 실패]:`, restErr);
+    }
   }
 
-  // 서버 통신 장애 시 최후의 비상 안전망
-  return emergencyFallbackConverter(inputText);
+  // 서버 통신 장애 시 최후의 비상 안전망 및 투명 로그 출력
+  return emergencyFallbackConverter(inputText, lastErrorMessage);
 };
