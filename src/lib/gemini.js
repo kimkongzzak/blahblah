@@ -72,8 +72,14 @@ const emergencyFallbackConverter = (text, reason = '네트워크 통신 지연')
   return result;
 };
 
+const STABLE_MODELS = [
+  'gemini-2.5-flash',
+  'gemini-3.5-flash',
+  'gemini-1.5-flash'
+];
+
 /**
- * 🚀 기존 구글 표준 SDK (GoogleGenerativeAI) 기반 gemini-1.5-flash 모델 원복
+ * 🚀 구글 AI Studio 신규 및 구형 API 키 100% 호환 모델 탐색
  */
 export const convertTextToEmoji = async (inputText) => {
   if (!inputText || inputText.trim() === '') {
@@ -104,71 +110,64 @@ Emoji Sequence:`;
 
   let lastErrorMessage = '';
   const encodedInput = encodeSafeBase64(inputText);
+  const genAI = new GoogleGenerativeAI(apiKey);
 
-  // [기존 표준 방식] GoogleGenerativeAI 표준 SDK로 gemini-1.5-flash 호출
-  try {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-
-    const result = await model.generateContent(promptText);
-    const response = await result.response;
-    const responseText = response.text() ? response.text().trim() : '';
-    const pureEmojis = extractPureEmojisOnly(responseText);
-
-    if (pureEmojis && pureEmojis.length >= 1) {
-      console.log(`✅ [Gemini AI 변환 성공] 입력: "${inputText}" ➡️ 이모지: ${pureEmojis}`);
-
-      logAiExecution({
-        inputText: encodedInput,
-        isSuccess: true,
-        usedModel: 'gemini-1.5-flash-sdk',
-        outputEmoji: pureEmojis,
-        errorMessage: null
-      });
-
-      return pureEmojis;
-    } else {
-      lastErrorMessage = '응답 텍스트에 이모지가 없음';
-    }
-  } catch (sdkErr) {
-    lastErrorMessage = sdkErr?.message || String(sdkErr);
-
-    // REST 직통 2차 백업 시도
+  for (const modelName of STABLE_MODELS) {
     try {
-      const restUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-      const res = await fetch(restUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: promptText }] }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 300 }
-        })
-      });
+      const model = genAI.getGenerativeModel({ model: modelName });
+      const result = await model.generateContent(promptText);
+      const response = await result.response;
+      const responseText = response.text() ? response.text().trim() : '';
+      const pureEmojis = extractPureEmojisOnly(responseText);
 
-      if (res.ok) {
-        const data = await res.json();
-        const responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        const pureEmojis = extractPureEmojisOnly(responseText);
+      if (pureEmojis && pureEmojis.length >= 1) {
+        console.log(`✅ [Gemini AI 변환 성공] 모델: ${modelName} ➡️ 이모지: ${pureEmojis}`);
 
-        if (pureEmojis && pureEmojis.length >= 1) {
-          console.log(`✅ [Gemini AI 변환 성공] 입력: "${inputText}" ➡️ 이모지: ${pureEmojis}`);
+        logAiExecution({
+          inputText: encodedInput,
+          isSuccess: true,
+          usedModel: `${modelName}-sdk`,
+          outputEmoji: pureEmojis,
+          errorMessage: null
+        });
 
-          logAiExecution({
-            inputText: encodedInput,
-            isSuccess: true,
-            usedModel: 'gemini-1.5-flash-rest',
-            outputEmoji: pureEmojis,
-            errorMessage: null
-          });
-
-          return pureEmojis;
-        }
-      } else {
-        const errData = await res.json().catch(() => ({}));
-        lastErrorMessage = errData?.error?.message || `Status ${res.status}`;
+        return pureEmojis;
       }
-    } catch (restErr) {
-      lastErrorMessage = restErr?.message || String(restErr);
+    } catch (sdkErr) {
+      lastErrorMessage = sdkErr?.message || String(sdkErr);
+
+      // REST 2차 시도
+      try {
+        const restUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+        const res = await fetch(restUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: promptText }] }],
+            generationConfig: { temperature: 0.7, maxOutputTokens: 300 }
+          })
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          const pureEmojis = extractPureEmojisOnly(responseText);
+
+          if (pureEmojis && pureEmojis.length >= 1) {
+            console.log(`✅ [Gemini AI 변환 성공] 모델: ${modelName} (REST) ➡️ 이모지: ${pureEmojis}`);
+
+            logAiExecution({
+              inputText: encodedInput,
+              isSuccess: true,
+              usedModel: `${modelName}-rest`,
+              outputEmoji: pureEmojis,
+              errorMessage: null
+            });
+
+            return pureEmojis;
+          }
+        }
+      } catch (restErr) {}
     }
   }
 
