@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const getGeminiApiKey = () => {
   return import.meta.env.VITE_GEMINI_API_KEY || localStorage.getItem('CUSTOM_GEMINI_API_KEY') || '';
@@ -58,7 +58,7 @@ const fallbackRuleBasedConverter = (text) => {
     resultEmojis.push('💬', '🎭', '⚡️', '👀', '💭');
   }
 
-  // 중복 제거 후 최대 6개 선택
+  // 중복 제거 후 선택
   const unique = Array.from(new Set(resultEmojis));
   
   // 사용자의 예시 입력 ("개자식 하품하지 말고 그냥 죽었으면") 특수 매칭
@@ -81,7 +81,8 @@ export const convertTextToEmoji = async (inputText) => {
 
   if (isGeminiConfigured()) {
     try {
-      const ai = new GoogleGenAI({ apiKey });
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
       
       const prompt = `System Rule: You are an expert translator that converts user input (which may contain raw emotions, corporate stress, insults, complaints, or jokes) exclusively into a sequence of vivid, storytelling emojis.
       
@@ -94,17 +95,11 @@ Rules:
 User Input: "${inputText.replace(/"/g, '')}"
 Emoji Sequence Output:`;
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt,
-        config: {
-          temperature: 0.7,
-          maxOutputTokens: 50,
-        }
-      });
-
-      const text = response.text ? response.text.trim() : '';
-      // 이모지만 추출 (이모지 및 유니코드 심볼만 포함되도록 정제)
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text() ? response.text().trim() : '';
+      
+      // 이모지만 추출
       const emojiOnly = text.replace(/[a-zA-Z0-9\s.,!?"'가-힣]/g, '');
 
       if (emojiOnly && emojiOnly.length >= 1) {
