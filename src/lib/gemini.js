@@ -82,7 +82,7 @@ CRITICAL INSTRUCTIONS:
 User Input: "${inputText.replace(/"/g, '')}"
 Emoji Sequence:`;
 
-    // 1. Try Google's Latest Official @google/genai SDK with model 'gemini-3.5-flash'
+    // 1. Try Google's Official @google/genai SDK with model 'gemini-3.5-flash'
     try {
       const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
       
@@ -99,37 +99,34 @@ Emoji Sequence:`;
       const pureEmojis = extractPureEmojisOnly(responseText);
 
       if (pureEmojis && pureEmojis.length >= 1) {
-        return pureEmojis;
+        return pureEmojis; // Immediate return on success
       }
     } catch (err) {
-      console.warn('[Next-Gen @google/genai SDK] Call failed, fallback to direct REST:', err);
+      console.warn('[SDK failover to REST]', err);
     }
 
-    // 2. Try REST fallback with gemini-3.5-flash & gemini-1.5-flash
-    const restModels = ['gemini-3.5-flash', 'gemini-1.5-flash', 'gemini-3.5-pro'];
-    for (const modelName of restModels) {
-      try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey.trim()}`;
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: promptText }] }],
-            generationConfig: { temperature: 0.6, maxOutputTokens: 50 }
-          })
-        });
+    // 2. Direct REST call ONLY for gemini-3.5-flash (No secondary deprecated model calls)
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey.trim()}`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: promptText }] }],
+          generationConfig: { temperature: 0.6, maxOutputTokens: 50 }
+        })
+      });
 
-        if (res.ok) {
-          const data = await res.json();
-          const responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-          const pureEmojis = extractPureEmojisOnly(responseText);
+      if (res.ok) {
+        const data = await res.json();
+        const responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        const pureEmojis = extractPureEmojisOnly(responseText);
 
-          if (pureEmojis && pureEmojis.length >= 1) {
-            return pureEmojis;
-          }
+        if (pureEmojis && pureEmojis.length >= 1) {
+          return pureEmojis;
         }
-      } catch (e) {}
-    }
+      }
+    } catch (e) {}
   }
 
   return fallbackRuleBasedConverter(inputText);
