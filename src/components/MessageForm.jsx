@@ -59,13 +59,13 @@ export default function MessageForm({ onMessageAdded }) {
           {/* 🎭 FROM */}
           <div className="relative">
             <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm select-none">
-              🎭
+              🎭 FROM
             </span>
             <input
               type="text"
               value={fromName}
               onChange={(e) => setFromName(e.target.value)}
-              placeholder="FROM (기본: 익명)"
+              placeholder=""
               maxLength={20}
               className="w-full pl-8 pr-3 py-1.5 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500"
             />
@@ -74,13 +74,13 @@ export default function MessageForm({ onMessageAdded }) {
           {/* 🗑️ TO */}
           <div className="relative">
             <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm select-none">
-              🗑️
+              🗑️ TO
             </span>
             <input
               type="text"
               value={toName}
               onChange={(e) => setToName(e.target.value)}
-              placeholder="TO (대상)"
+              placeholder=""
               maxLength={25}
               className="w-full pl-8 pr-3 py-1.5 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500"
             />
