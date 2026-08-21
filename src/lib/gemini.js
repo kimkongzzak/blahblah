@@ -51,15 +51,38 @@ const fallbackRuleBasedConverter = (text) => {
 };
 
 /**
- * Direct REST Fetch with Automatic Failover List
- * SDK 버전 고정 문제 없이 100% 구글 REST API로 직접 호출하며, 404 발생 시 다음 검증된 모델로 시도
+ * Fetch Exact Active Model Path List from Google API Response
  */
-const SAFE_MODELS = [
-  'gemini-1.5-flash',
-  'gemini-2.0-flash',
-  'gemini-2.5-flash',
-  'gemini-1.5-pro'
-];
+const getActiveExactModelPaths = async (apiKey) => {
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+    if (res.ok) {
+      const data = await res.json();
+      const models = data.models || [];
+
+      // Filter models that support generateContent
+      const valid = models.filter(m => 
+        m.name && 
+        Array.isArray(m.supportedGenerationMethods) &&
+        m.supportedGenerationMethods.includes('generateContent')
+      );
+
+      // Return exact model names (e.g. "models/gemini-1.5-flash-8b")
+      if (valid.length > 0) {
+        return valid.map(m => m.name);
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to query model list:', e);
+  }
+
+  // Default hardcoded fallbacks if list API blocked
+  return [
+    'models/gemini-1.5-flash-8b',
+    'models/gemini-1.5-flash-latest',
+    'models/gemini-1.5-pro-latest'
+  ];
+};
 
 export const convertTextToEmoji = async (inputText) => {
   if (!inputText || inputText.trim() === '') {
@@ -80,10 +103,13 @@ Rules:
 User Input: "${inputText.replace(/"/g, '')}"
 Emoji Sequence Output:`;
 
-    // Try models via Direct REST fetch to avoid SDK version mismatch
-    for (const modelName of SAFE_MODELS) {
+    // 1. Fetch exact model paths dynamically returned by Google
+    const exactModelPaths = await getActiveExactModelPaths(apiKey);
+
+    // 2. Try exact model paths in sequence
+    for (const modelPath of exactModelPaths) {
       try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/${modelPath}:generateContent?key=${apiKey}`;
         const res = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -104,12 +130,9 @@ Emoji Sequence Output:`;
           if (emojiOnly && emojiOnly.length >= 1) {
             return emojiOnly;
           }
-        } else {
-          const errorData = await res.json().catch(() => ({}));
-          console.warn(`[Gemini Direct REST] Model '${modelName}' returned status ${res.status}:`, errorData?.error?.message);
         }
       } catch (err) {
-        console.warn(`[Gemini Direct REST] Network error for model '${modelName}':`, err);
+        console.warn(`[Gemini API] Failed calling '${modelPath}':`, err);
       }
     }
   }
